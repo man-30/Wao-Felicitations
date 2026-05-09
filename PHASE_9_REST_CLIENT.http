@@ -1,0 +1,242 @@
+### Variables globales
+@baseUrl = http://localhost:3000
+@contentType = application/json
+
+### Étape 1: Initialiser les données de test
+POST {{baseUrl}}/api/seed
+Content-Type: {{contentType}}
+
+{}
+
+### Étape 2: Login Admin
+POST {{baseUrl}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "admin@wao.test",
+  "password": "SecurePassword123!"
+}
+
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+---
+
+## PHASE 9.1 - Security & Authentication
+
+### Test 1: Login avec credentials valides
+POST {{baseUrl}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "admin@wao.test",
+  "password": "SecurePassword123!"
+}
+
+### Test 2: Login avec password invalide
+POST {{baseUrl}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "admin@wao.test",
+  "password": "WrongPassword"
+}
+
+### Test 3: Route protégée sans token
+POST {{baseUrl}}/api/clients
+Content-Type: {{contentType}}
+
+{
+  "first_name": "John",
+  "last_name": "Doe"
+}
+
+### Test 4: Route protégée avec token invalide
+POST {{baseUrl}}/api/clients
+Content-Type: {{contentType}}
+Authorization: Bearer invalid.token.here
+
+{
+  "first_name": "John",
+  "last_name": "Doe"
+}
+
+### Test 5: Vérifier accès root
+GET {{baseUrl}}/
+Authorization: Bearer {{token}}
+
+---
+
+## PHASE 9.2 - Business Logic
+
+### Test 6: Créer client
+POST {{baseUrl}}/api/clients
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "first_name": "Jean",
+  "last_name": "Dupont",
+  "email": "jean@example.com",
+  "phone": "+221771234567",
+  "cni": "12345678901234"
+}
+
+### Test 7: Enregistrer transaction
+POST {{baseUrl}}/api/transactions
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "client_id": "client-uuid",
+  "amount": 50000,
+  "transaction_type": "deposit",
+  "description": "Member deposit"
+}
+
+### Test 8: Enregistrer cotisation
+POST {{baseUrl}}/api/cotisations
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "client_id": "client-uuid",
+  "cycle_id": 1,
+  "amount": 10000
+}
+
+### Test 9: Advanced Deposit
+POST {{baseUrl}}/api/cotisations/advanced-deposit
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "client_id": "client-uuid",
+  "cycle_id": 1,
+  "cotisation_amount": 10000,
+  "savings_amount": 20000
+}
+
+### Test 10: Transfer Financing to Savings
+POST {{baseUrl}}/api/accounts/transfer-financing-to-savings
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "client_id": "client-uuid",
+  "amount": 5000,
+  "financing_account_id": "fin-account-uuid"
+}
+
+### Test 11: Invalid Client ID
+POST {{baseUrl}}/api/transactions
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "client_id": "non-existent-uuid",
+  "amount": 50000,
+  "transaction_type": "deposit"
+}
+
+### Test 12: Negative Amount Validation
+POST {{baseUrl}}/api/transactions
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "client_id": "client-uuid",
+  "amount": -5000,
+  "transaction_type": "deposit"
+}
+
+---
+
+## PHASE 9.3 - Data Integrity
+
+### Test 13: Unique Membership Code (1/2)
+POST {{baseUrl}}/api/clients
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "first_name": "Jean",
+  "last_name": "Dupont",
+  "email": "jean2@test.com",
+  "phone": "+221771234567",
+  "cni": "12345"
+}
+
+### Test 14: Unique Account Number (2/2)
+POST {{baseUrl}}/api/clients
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "first_name": "Marie",
+  "last_name": "Martin",
+  "email": "marie@test.com",
+  "phone": "+221771234568",
+  "cni": "67890"
+}
+
+### Test 15: Amount CHECK Constraint
+POST {{baseUrl}}/api/transactions
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "client_id": "client-uuid",
+  "amount": 0,
+  "transaction_type": "deposit"
+}
+
+### Test 16: Email Format Validation
+POST {{baseUrl}}/api/clients
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "first_name": "Test",
+  "last_name": "User",
+  "email": "invalid-email",
+  "phone": "+221771234567",
+  "cni": "12345"
+}
+
+---
+
+## PHASE 9.4 - Logging & Audit
+
+### Test 17: Récupérer audit logs
+GET {{baseUrl}}/api/audit-logs
+Authorization: Bearer {{token}}
+
+### Test 18: Audit logs par utilisateur
+GET {{baseUrl}}/api/audit-logs/user/user-id
+Authorization: Bearer {{token}}
+
+### Test 19: Dashboard stats
+GET {{baseUrl}}/api/dashboard/stats
+Authorization: Bearer {{token}}
+
+---
+
+## PHASE 9.5 - Performance
+
+### Test 20: Response time check
+GET {{baseUrl}}/
+Authorization: Bearer {{token}}
+
+### Instructions d'utilisation:
+
+# 1. Installez l'extension "REST Client" dans VS Code
+# 2. Ouvrez ce fichier (.http ou .rest)
+# 3. Cliquez sur "Send Request" au-dessus de chaque requête
+# 4. Utilisez @variables pour partager les données entre requêtes
+# 5. Après le login, copiez le token et mettez à jour @token
+
+### Notes:
+# - Exécutez d'abord "Étape 1: Initialiser les données de test"
+# - Puis exécutez "Étape 2: Login Admin" pour obtenir un token valide
+# - Remplacez {{token}} par le vrai token dans chaque requête protégée
+# - Remplacez client-uuid par l'ID réel du client créé

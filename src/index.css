@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+:root {
+  --waooo-green: #228B22;
+  --waooo-green-dark: #1a6d1a;
+  --waooo-green-soft: #eaf3ea;
+  --waooo-red: #DC2626;
+  --waooo-red-dark: #b91c1c;
+  --waooo-gold: #D4AF37;
+  --waooo-gold-soft: #fffcf5;
+  --waooo-ink: #1f1f1f;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(0, 154, 68, 0.08), transparent 30rem),
+    radial-gradient(circle at top right, rgba(223, 35, 31, 0.06), transparent 26rem),
+    #f8fafc;
+}
+
+::selection {
+  background: var(--waooo-gold);
+  color: white;
+}
+
+/* Brand color remap for the existing interface. */
+.bg-indigo-50 { background-color: var(--waooo-green-soft) !important; }
+.bg-indigo-100 { background-color: #d8f0e2 !important; }
+.bg-indigo-500,
+.bg-indigo-600,
+.hover\:bg-indigo-700:hover { background-color: var(--waooo-green) !important; }
+.bg-indigo-700,
+.bg-indigo-800,
+.bg-indigo-900,
+.hover\:bg-indigo-800:hover { background-color: var(--waooo-green-dark) !important; }
+
+.text-indigo-100,
+.text-indigo-200,
+.text-indigo-300 { color: #d8f7e5 !important; }
+.text-indigo-400,
+.text-indigo-500,
+.text-indigo-600,
+.text-indigo-700 { color: var(--waooo-green) !important; }
+.text-indigo-800,
+.text-indigo-900,
+.text-indigo-950 { color: var(--waooo-green-dark) !important; }
+
+.border-indigo-100,
+.border-indigo-200 { border-color: #bfe6cf !important; }
+.border-indigo-500,
+.border-indigo-600 { border-color: var(--waooo-green) !important; }
+.ring-indigo-500 { --tw-ring-color: var(--waooo-green) !important; }
+
+.focus\:border-indigo-500:focus { border-color: var(--waooo-green) !important; }
+.focus\:ring-indigo-500:focus { --tw-ring-color: var(--waooo-green) !important; }
+
+.via-indigo-950 {
+  --tw-gradient-via: var(--waooo-green-dark) var(--tw-gradient-via-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to) !important;
+}
+.from-indigo-700,
+.from-indigo-800 { --tw-gradient-from: var(--waooo-green-dark) var(--tw-gradient-from-position) !important; }
+.to-indigo-600,
+.to-indigo-900 { --tw-gradient-to: var(--waooo-green) var(--tw-gradient-to-position) !important; }
+
+/* Nouveau branding pour le reste */
+.text-brand-red { color: var(--waooo-red); }
+.bg-brand-red { background-color: var(--waooo-red); }
+.border-brand-red { border-color: var(--waooo-red); }
+
+.text-brand-gold { color: var(--waooo-gold); }
+.bg-brand-gold { background-color: var(--waooo-gold); }
+.border-brand-gold { border-color: var(--waooo-gold); }
+
+/* Directive 13 — Scrollable Modals */
+.modal-overlay {
+  background-color: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+}
+
+.modal-container {
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-content {
+  overflow-y: auto;
+  flex: 1;
+  scrollbar-width: thin;
+  scrollbar-color: var(--waooo-green) transparent;
+}
+
+.modal-footer {
+  flex-shrink: 0;
+}
+
+/* Print styles for Directive 14 & 15 */
+@media print {
+  .no-print { display: none !important; }
+  body { background: white !important; padding: 0 !important; margin: 0 !important; }
+  .print-only { display: block !important; }
+  .modal-overlay { background: transparent !important; backdrop-filter: none !important; position: static !important; }
+  .modal-container { box-shadow: none !important; border: none !important; width: 100% !important; max-width: none !important; max-height: none !important; position: static !important; margin: 0 !important; }
+}
+
+.brand-gold { color: var(--waooo-gold); }
+.bg-brand-gold { background-color: var(--waooo-gold); }

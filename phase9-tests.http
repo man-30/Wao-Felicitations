@@ -1,0 +1,286 @@
+# ============================================================
+# PHASE 9 — Tests Backend avec VS Code REST Client
+# Wao Félicitations v2.0
+#
+# INSTRUCTIONS:
+# 1. Cliquez "Send Request" au-dessus de chaque requête
+# 2. Exécutez dans l'ORDRE (SETUP en premier!)
+# 3. Les variables @token et @clientId sont auto-remplis
+# ============================================================
+
+@baseUrl = http://localhost:3000
+
+# ============================================================
+# 🔧 SETUP — Initialiser les données de test
+# ============================================================
+
+### SETUP: Créer les utilisateurs de test
+# @name seedRequest
+POST {{baseUrl}}/api/seed
+Content-Type: application/json
+
+
+
+###
+
+# ============================================================
+# 🔐 PHASE 9.1 — Security & Authentication
+# ============================================================
+
+### TEST 1: Login avec credentials valides (Admin)
+# @name loginAdmin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@wao.test",
+  "password": "SecurePassword123!"
+}
+
+###
+
+# Le token est capturé automatiquement depuis la réponse du TEST 1
+@token = {{loginAdmin.response.body.token}}
+
+### TEST 2: Login avec credentials invalides → doit retourner 401
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@wao.test",
+  "password": "MauvaisMotDePasse!"
+}
+
+###
+
+### TEST 3: Route protégée SANS token → doit retourner 401
+POST {{baseUrl}}/api/clients
+Content-Type: application/json
+
+{
+  "name": "Test NoToken",
+  "type": "simple",
+  "phone": "+221771234567"
+}
+
+###
+
+### TEST 4: Route protégée avec token INVALIDE → doit retourner 403 (token invalide = Forbidden)
+POST {{baseUrl}}/api/clients
+Content-Type: application/json
+Authorization: Bearer invalid.token.here
+
+{
+  "name": "Test BadToken",
+  "type": "simple",
+  "phone": "+221771234567"
+}
+
+###
+
+### TEST 5: Vérification du token (route publique avec token valide)
+GET {{baseUrl}}/
+Authorization: Bearer {{token}}
+
+###
+
+# ============================================================
+# 💼 PHASE 9.2 — Business Logic
+# ============================================================
+
+### TEST 6: Créer un client (Admin)
+# @name createClient
+POST {{baseUrl}}/api/clients
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Jean Dupont",
+  "type": "apprenant",
+  "phone": "+221771234567",
+  "address": "Dakar, Sénégal"
+}
+
+###
+
+@clientId = {{createClient.response.body.id}}
+
+### TEST 7: Enregistrer une transaction (dépôt)
+POST {{baseUrl}}/api/transactions
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "client_id": "{{clientId}}",
+  "amount": 50000,
+  "transaction_type": "depot",
+  "description": "Dépôt membre"
+}
+
+###
+
+### TEST 8: Enregistrer une cotisation
+POST {{baseUrl}}/api/cotisations
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "client_id": "{{clientId}}",
+  "cycle_id": 1,
+  "amount": 10000
+}
+
+###
+
+### TEST 9: Dépôt avancé (cotisation + épargne)
+POST {{baseUrl}}/api/cotisations/advanced-deposit
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "client_id": "{{clientId}}",
+  "cycle_id": 1,
+  "cotisation_amount": 10000,
+  "savings_amount": 20000
+}
+
+###
+
+### TEST 10: Transfert financement → épargne
+POST {{baseUrl}}/api/accounts/transfer-financing-to-savings
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "client_id": "{{clientId}}",
+  "amount": 5000,
+  "financing_account_id": "fin-account-uuid"
+}
+
+###
+
+### TEST 11: ID client inexistant → doit retourner 404
+POST {{baseUrl}}/api/transactions
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "client_id": "00000000-0000-0000-0000-000000000000",
+  "amount": 50000,
+  "transaction_type": "depot"
+}
+
+###
+
+### TEST 12: Montant négatif → doit retourner 400
+POST {{baseUrl}}/api/transactions
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "client_id": "{{clientId}}",
+  "amount": -5000,
+  "transaction_type": "depot"
+}
+
+###
+
+# ============================================================
+# 📊 PHASE 9.3 — Intégrité des données
+# ============================================================
+
+### TEST 13: Créer 2ème client (code membership unique)
+# @name createClient2
+POST {{baseUrl}}/api/clients
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Marie Martin",
+  "type": "non_apprenant",
+  "phone": "+221779876543",
+  "address": "Thiès, Sénégal"
+}
+
+###
+
+### TEST 14: Créer 3ème client (numéro de compte unique)
+# @name createClient3
+POST {{baseUrl}}/api/clients
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Pierre Diallo",
+  "type": "simple",
+  "phone": "+221775555555",
+  "address": "Saint-Louis, Sénégal"
+}
+
+###
+
+### TEST 15: Montant zéro → contrainte CHECK → doit retourner 400
+POST {{baseUrl}}/api/transactions
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "client_id": "{{clientId}}",
+  "amount": 0,
+  "transaction_type": "depot"
+}
+
+###
+
+### TEST 16: Type invalide → doit retourner 400
+POST {{baseUrl}}/api/clients
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Test Invalid",
+  "type": "type_inexistant",
+  "phone": "+221771234567"
+}
+
+###
+
+# ============================================================
+# 📝 PHASE 9.4 — Journalisation & Audit
+# ============================================================
+
+### TEST 17: Récupérer les logs d'audit
+GET {{baseUrl}}/api/audit-logs
+Authorization: Bearer {{token}}
+
+###
+
+### TEST 18: Récupérer les détails d'un client
+GET {{baseUrl}}/api/clients/{{clientId}}
+Authorization: Bearer {{token}}
+
+###
+
+### TEST 19: Dashboard stats (vérifie que les logs sont enregistrés)
+GET {{baseUrl}}/api/dashboard/stats
+Authorization: Bearer {{token}}
+
+###
+
+# ============================================================
+# ⚡ PHASE 9.5 — Performance
+# ============================================================
+
+### TEST 20: Temps de réponse de la route principale
+GET {{baseUrl}}/
+
+###
+
+### TEST 21: Constraint XOR (cotisation_account)
+POST {{baseUrl}}/api/validation/cotisation-account-constraint
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{}
+
+###
