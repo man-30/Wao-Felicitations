@@ -1,15 +1,33 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActionLog } from '../types';
 import { db } from '../localStorageDB';
+import api from '../config/api';
 import { ShieldCheck, Search, RefreshCw } from 'lucide-react';
 
 export default function ActionLogs() {
-  const [logs, setLogs] = useState<ActionLog[]>(db.getLogs());
+  const [logs, setLogs] = useState<ActionLog[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [backendError, setBackendError] = useState('');
 
-  const refreshLogs = () => {
-    setLogs(db.getLogs());
+  const refreshLogs = async () => {
+    setLoading(true);
+    setBackendError('');
+
+    try {
+      const response = await api.getAuditLogs({ limit: 200 });
+      setLogs(response.logs);
+    } catch (err: any) {
+      setBackendError(err.message || 'Impossible de charger les logs depuis le backend. Mode local activé.');
+      setLogs(db.getLogs());
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    refreshLogs();
+  }, []);
 
   const filteredLogs = logs.filter(
     log =>
@@ -27,11 +45,17 @@ export default function ActionLogs() {
         </div>
         <button
           onClick={refreshLogs}
-          className="p-2 text-slate-500 hover:text-indigo-600 rounded-lg hover:bg-slate-100 transition-colors flex items-center gap-1 text-sm font-semibold border border-slate-200"
+          disabled={loading}
+          className="p-2 text-slate-500 hover:text-indigo-600 rounded-lg hover:bg-slate-100 transition-colors flex items-center gap-1 text-sm font-semibold border border-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <RefreshCw className="w-4 h-4" /> Actualiser
         </button>
       </div>
+      {backendError && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {backendError}
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex items-center gap-2 bg-slate-50">

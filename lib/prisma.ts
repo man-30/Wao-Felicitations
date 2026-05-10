@@ -15,7 +15,12 @@ const prismaClientSingleton = () => {
     throw new Error('DATABASE_URL or DATABASE_URL_POOLED environment variable is not set')
   }
 
-  const pool = new pg.Pool({ connectionString })
+  const pool = new pg.Pool({ 
+    connectionString,
+    max: 20, // Maximum pool size for high concurrency
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000,
+  })
   const adapter = new PrismaPg(pool)
 
   return new PrismaClient({

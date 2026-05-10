@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Account, Client, ClientType, User, SchoolDebt, DureeFinancement, FinancementNonApprenant } from '../types';
 import { db } from '../localStorageDB';
+import api from '../config/api';
 import { calculerGrille, calculerGrilleNonApprenant } from '../grille';
 import {
   UserPlus, Search, GraduationCap, UserCheck, Briefcase,
@@ -13,7 +14,28 @@ interface Props { currentUser: User; }
 export default function ClientManagement({ currentUser }: Props) {
   const [clients, setClients] = useState<Client[]>(db.getClients());
   const [accounts, setAccounts] = useState<Account[]>(db.getAccounts());
+  const [backendError, setBackendError] = useState('');
+  const [isLoadingClients, setIsLoadingClients] = useState(false);
   const commercials = db.getUsers().filter(u => u.role === 'commercial');
+
+  useEffect(() => {
+    const fetchClients = async () => {
+      setIsLoadingClients(true);
+      setBackendError('');
+
+      try {
+        const apiClients = await api.getClients();
+        setClients(apiClients);
+        db.saveClients(apiClients);
+      } catch (err: any) {
+        setBackendError(err.message || 'Impossible de charger la liste des clients depuis le backend.');
+      } finally {
+        setIsLoadingClients(false);
+      }
+    };
+
+    fetchClients();
+  }, []);
 
   // Create
   const [name, setName] = useState('');
@@ -75,7 +97,7 @@ export default function ClientManagement({ currentUser }: Props) {
     return c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.phone.includes(searchTerm);
   });
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !phone || !assignedCommercialId) { setMsg({ text: 'Nom, téléphone et commercial obligatoires.', type: 'error' }); return; }
     if (type === 'apprenant') {
@@ -106,39 +128,77 @@ export default function ClientManagement({ currentUser }: Props) {
       createdAt: new Date().toISOString().split('T')[0],
     };
 
-    const upd = [...clients, nc];
-    db.saveClients(upd);
-    setClients(upd);
-    if (type === 'apprenant') {
-      const apprenants = db.getApprenants();
-      db.saveApprenants([
-        ...apprenants,
-        {
-          id: 'ap_' + Date.now(),
-          clientId: nc.id,
-          studentName: nc.name,
-          schoolName: schoolName || 'Non renseigné',
-          schoolLevel: 'Non renseigné',
-          schoolYear: new Date().getFullYear().toString(),
-          guardian: { id: 'g_' + Date.now(), fullName: parentName, phone: parentContact, relationship: parentRelation },
-          caution: { id: 'ca_' + Date.now(), fullName: cautionName, phone: cautionContact, profession: cautionProfession },
-          documents: [
-            { key: 'cni', label: 'Carte Nationale d’Identité', status: docCni ? 'fourni' : 'manquant' },
-            { key: 'passeport', label: 'Passeport', status: docPassport ? 'fourni' : 'manquant' },
-            { key: 'acte_naissance', label: 'Acte de naissance', status: docBirth ? 'fourni' : 'manquant' },
-            { key: 'certificat_scolarite', label: 'Certificat de scolarité', status: docSchool ? 'fourni' : 'manquant' },
-            ...(docOther ? [{ key: 'autre', label: docOtherText, status: 'fourni' as const }] : []),
-          ],
-          createdBy: currentUser.id,
-          createdAt: nc.createdAt,
-        },
-      ]);
+    try {
+      const createdClient = await api.createClient({ name, type, phone, address, assignedCommercialId });
+      setClients((prev) => [createdClient, ...prev]);
+      db.saveClients([createdClient, ...db.getClients()]);
+      if (type === 'apprenant') {
+        const apprenants = db.getApprenants();
+        db.saveApprenants([
+          ...apprenants,
+          {
+            id: 'ap_' + Date.now(),
+            clientId: createdClient.id,
+            studentName: createdClient.name,
+            schoolName: schoolName || 'Non renseigné',
+            schoolLevel: 'Non renseigné',
+            schoolYear: new Date().getFullYear().toString(),
+            guardian: { id: 'g_' + Date.now(), fullName: parentName, phone: parentContact, relationship: parentRelation },
+            caution: { id: 'ca_' + Date.now(), fullName: cautionName, phone: cautionContact, profession: cautionProfession },
+            documents: [
+              { key: 'cni', label: 'Carte Nationale d’Identité', status: docCni ? 'fourni' : 'manquant' },
+              { key: 'passeport', label: 'Passeport', status: docPassport ? 'fourni' : 'manquant' },
+              { key: 'acte_naissance', label: 'Acte de naissance', status: docBirth ? 'fourni' : 'manquant' },
+              { key: 'certificat_scolarite', label: 'Certificat de scolarité', status: docSchool ? 'fourni' : 'manquant' },
+              ...(docOther ? [{ key: 'autre', label: docOtherText, status: 'fourni' as const }] : []),
+            ],
+            createdBy: currentUser.id,
+            createdAt: createdClient.createdAt || nc.createdAt,
+          },
+        ]);
+      }
+      db.addLog(currentUser.id, currentUser.name, currentUser.role, 'Création Client', `Client ${createdClient.name} (${type}) créé, assigné à ${assignedCommercialId}`);
+      setName(''); setType('simple'); setPhone(''); setAddress(''); setAssignedCommercialId(''); setSchoolName(''); setInitialDebt(0);
+      setParentName(''); setParentContact(''); setParentRelation('Père'); setCautionName(''); setCautionContact(''); setCautionProfession('');
+      setDocCni(false); setDocPassport(false); setDocBirth(false); setDocSchool(false); setDocOther(false); setDocOtherText('');
+      setMsg({ text: `Client ${createdClient.name} créé avec succès sur le backend.`, type: 'success' });
+      return;
+    } catch (err: any) {
+      setBackendError(err.message || 'Impossible de créer le client sur le backend. Mode local activé.');
+      const upd = [...clients, nc];
+      db.saveClients(upd);
+      setClients(upd);
+      if (type === 'apprenant') {
+        const apprenants = db.getApprenants();
+        db.saveApprenants([
+          ...apprenants,
+          {
+            id: 'ap_' + Date.now(),
+            clientId: nc.id,
+            studentName: nc.name,
+            schoolName: schoolName || 'Non renseigné',
+            schoolLevel: 'Non renseigné',
+            schoolYear: new Date().getFullYear().toString(),
+            guardian: { id: 'g_' + Date.now(), fullName: parentName, phone: parentContact, relationship: parentRelation },
+            caution: { id: 'ca_' + Date.now(), fullName: cautionName, phone: cautionContact, profession: cautionProfession },
+            documents: [
+              { key: 'cni', label: 'Carte Nationale d’Identité', status: docCni ? 'fourni' : 'manquant' },
+              { key: 'passeport', label: 'Passeport', status: docPassport ? 'fourni' : 'manquant' },
+              { key: 'acte_naissance', label: 'Acte de naissance', status: docBirth ? 'fourni' : 'manquant' },
+              { key: 'certificat_scolarite', label: 'Certificat de scolarité', status: docSchool ? 'fourni' : 'manquant' },
+              ...(docOther ? [{ key: 'autre', label: docOtherText, status: 'fourni' as const }] : []),
+            ],
+            createdBy: currentUser.id,
+            createdAt: nc.createdAt,
+          },
+        ]);
+      }
+      db.addLog(currentUser.id, currentUser.name, currentUser.role, 'Création Client', `Client ${name} (${type}) créé, assigné à ${assignedCommercialId}`);
+      setName(''); setType('simple'); setPhone(''); setAddress(''); setAssignedCommercialId(''); setSchoolName(''); setInitialDebt(0);
+      setParentName(''); setParentContact(''); setParentRelation('Père'); setCautionName(''); setCautionContact(''); setCautionProfession('');
+      setDocCni(false); setDocPassport(false); setDocBirth(false); setDocSchool(false); setDocOther(false); setDocOtherText('');
+      setMsg({ text: `Client ${nc.name} créé en local (backend indisponible).`, type: 'success' });
     }
-    db.addLog(currentUser.id, currentUser.name, currentUser.role, 'Création Client', `Client ${name} (${type}) créé, assigné à ${assignedCommercialId}`);
-    setName(''); setType('simple'); setPhone(''); setAddress(''); setAssignedCommercialId(''); setSchoolName(''); setInitialDebt(0);
-    setParentName(''); setParentContact(''); setParentRelation('Père'); setCautionName(''); setCautionContact(''); setCautionProfession('');
-    setDocCni(false); setDocPassport(false); setDocBirth(false); setDocSchool(false); setDocOther(false); setDocOtherText('');
-    setMsg({ text: `Client ${nc.name} créé avec succès.`, type: 'success' });
   };
 
   const openEdit = (c: Client) => {
@@ -409,11 +469,13 @@ export default function ClientManagement({ currentUser }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h2 className="text-2xl font-bold text-slate-800">Gestion des Clients</h2>
         <span className="text-xs font-semibold text-slate-400">{currentUser.role === 'commercial' ? 'Visibilité restreinte' : 'Accès complet — caissier'}</span>
       </div>
 
+      {isLoadingClients && <div className="text-sm text-slate-500">Chargement des clients depuis le backend...</div>}
+      {backendError && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{backendError}</div>}
       {msg.text && <div className={`p-3 text-sm rounded-xl border ${msg.type === 'error' ? 'bg-red-50 text-red-600 border-red-200' : 'bg-green-50 text-green-600 border-green-200'}`}>{msg.text}</div>}
 
       {/* Creation Form — 19.1: Supprimé du mode lecture seule caissier. Accès réservé à l'admin. */}

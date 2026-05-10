@@ -1,16 +1,7 @@
 @baseUrl = http://localhost:3001
 @contentType = application/json
 
-# -------------------------------------------------------------------------
-# Mode d'emploi rapide (VS Code REST Client)
-# 1) Exécute "Login Admin" puis "Login Cashier"
-# 2) Lance Test 1 (Create Client)
-# 3) Lance Test 2, 3, 4, 5 : les IDs sont repris automatiquement
-# 4) Puis lance Test 6 et 7
-# -------------------------------------------------------------------------
-
 ### Login Admin
-# @name loginAdmin
 POST {{baseUrl}}/api/auth/login
 Content-Type: {{contentType}}
 
@@ -20,7 +11,6 @@ Content-Type: {{contentType}}
 }
 
 ### Login Cashier
-# @name loginCashier
 POST {{baseUrl}}/api/auth/login
 Content-Type: {{contentType}}
 
@@ -30,31 +20,29 @@ Content-Type: {{contentType}}
 }
 
 ### Test 1: Create Client
-# @name createClient
 POST {{baseUrl}}/api/clients
 Content-Type: {{contentType}}
-Authorization: Bearer {{loginAdmin.response.body.token}}
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJzdGFnaW5nLXUtYWRtaW4iLCJlbWFpbCI6ImFkbWluQHN0YWdpbmcudGVzdCIsInJvbGUiOiJhZG1pbiIsInpvbmUiOiJLaW5zaGFzYSIsImlhdCI6MTc3ODM3Mjg2NSwiZXhwIjoxNzc4NDU5MjY1fQ.rM-dGvcTxZetJMGWUx8EJ6WjNL62ICefCnQ8Cp3Kc3E
 
 {
   "name": "Apprenant Test Phase 10",
   "type": "apprenant",
   "phone": "+243812345678",
   "address": "Kinshasa, Gombe",
-  "commercialId": "staging-u-commercial"
+  "assignedCommercialId": "staging-u-commercial"
 }
 
-### Test 2: Get Client (ID auto depuis Test 1)
-GET {{baseUrl}}/api/clients/{{createClient.response.body.id}}
-Authorization: Bearer {{loginAdmin.response.body.token}}
+### Test 2: Get Client (remplace ID_DU_CLIENT par l'ID retourné ci-dessus)
+GET {{baseUrl}}/api/clients/cmoz1xhq90006f0vs601mobg8
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJzdGFnaW5nLXUtYWRtaW4iLCJlbWFpbCI6ImFkbWluQHN0YWdpbmcudGVzdCIsInJvbGUiOiJhZG1pbiIsInpvbmUiOiJLaW5zaGFzYSIsImlhdCI6MTc3ODM3Mjg2NSwiZXhwIjoxNzc4NDU5MjY1fQ.rM-dGvcTxZetJMGWUx8EJ6WjNL62ICefCnQ8Cp3Kc3E
 
-### Test 3: Record Deposit (ID auto depuis Test 1)
-# @name recordDeposit
+### Test 3: Record Deposit (remplace ID_DU_CLIENT par l'ID du client)
 POST {{baseUrl}}/api/transactions
 Content-Type: {{contentType}}
-Authorization: Bearer {{loginCashier.response.body.token}}
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJzdGFnaW5nLXUtY2FzaGllciIsImVtYWlsIjoiY2FzaGllckBzdGFnaW5nLnRlc3QiLCJyb2xlIjoiY2Fpc3NpZXIiLCJ6b25lIjoiS2luc2hhc2EiLCJpYXQiOjE3NzgzNzI4NzMsImV4cCI6MTc3ODQ1OTI3M30.5OzH1j_9-eMep2BofTgGnpq1N2nKfV302OhbKoC0g-4
 
 {
-  "clientId": "{{createClient.response.body.id}}",
+  "clientId": "cmoz1xhq90006f0vs601mobg8",
   "clientName": "Apprenant Test Phase 10",
   "amount": 50000,
   "type": "depot",
@@ -63,32 +51,32 @@ Authorization: Bearer {{loginCashier.response.body.token}}
   "description": "Test deposit Phase 10"
 }
 
-### Test 4: Validate Transaction (ID auto depuis Test 3)
-PUT {{baseUrl}}/api/transactions/{{recordDeposit.response.body.transaction.id}}/validate
+### Test 4: Validate Transaction (remplace ID_DE_LA_TRANSACTION par l'ID retourné)
+PUT {{baseUrl}}/api/transactions/cmoz204ib0008f0vs36j43jj4/validate
 Content-Type: {{contentType}}
-Authorization: Bearer {{loginAdmin.response.body.token}}
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJzdGFnaW5nLXUtYWRtaW4iLCJlbWFpbCI6ImFkbWluQHN0YWdpbmcudGVzdCIsInJvbGUiOiJhZG1pbiIsInpvbmUiOiJLaW5zaGFzYSIsImlhdCI6MTc3ODM3Mjg2NSwiZXhwIjoxNzc4NDU5MjY1fQ.rM-dGvcTxZetJMGWUx8EJ6WjNL62ICefCnQ8Cp3Kc3E
 
 {
 }
 
-### Test 5: Record Cotisation (ID auto depuis Test 1)
+### Test 5: Record Cotisation (remplace ID_DU_CLIENT par l'ID du client)
 POST {{baseUrl}}/api/cotisations
 Content-Type: {{contentType}}
-Authorization: Bearer {{loginCashier.response.body.token}}
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJzdGFnaW5nLXUtY2FzaGllciIsImVtYWlsIjoiY2FzaGllckBzdGFnaW5nLnRlc3QiLCJyb2xlIjoiY2Fpc3NpZXIiLCJ6b25lIjoiS2luc2hhc2EiLCJpYXQiOjE3NzgzNzI4NzMsImV4cCI6MTc3ODQ1OTI3M30.5OzH1j_9-eMep2BofTgGnpq1N2nKfV302OhbKoC0g-4
 
 {
-  "clientId": "{{createClient.response.body.id}}",
+  "clientId": "cmoz1xhq90006f0vs601mobg8",
   "amount": 2500,
   "type": "cotisation",
-  "date": "2026-05-09",
+  "date": "2026-05-10",
   "collectedBy": "staging-u-cashier",
   "collectedByName": "Staging Cashier"
 }
 
 ### Test 6: Get Audit Logs
 GET {{baseUrl}}/api/audit-logs
-Authorization: Bearer {{loginAdmin.response.body.token}}
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJzdGFnaW5nLXUtYWRtaW4iLCJlbWFpbCI6ImFkbWluQHN0YWdpbmcudGVzdCIsInJvbGUiOiJhZG1pbiIsInpvbmUiOiJLaW5zaGFzYSIsImlhdCI6MTc3ODM3Mjg2NSwiZXhwIjoxNzc4NDU5MjY1fQ.rM-dGvcTxZetJMGWUx8EJ6WjNL62ICefCnQ8Cp3Kc3E
 
 ### Test 7: Get Dashboard Stats
 GET {{baseUrl}}/api/dashboard/stats
-Authorization: Bearer {{loginAdmin.response.body.token}}
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJzdGFnaW5nLXUtYWRtaW4iLCJlbWFpbCI6ImFkbWluQHN0YWdpbmcudGVzdCIsInJvbGUiOiJhZG1pbiIsInpvbmUiOiJLaW5zaGFzYSIsImlhdCI6MTc3ODM3Mjg2NSwiZXhwIjoxNzc4NDU5MjY1fQ.rM-dGvcTxZetJMGWUx8EJ6WjNL62ICefCnQ8Cp3Kc3E

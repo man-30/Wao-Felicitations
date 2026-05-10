@@ -1,6 +1,6 @@
 # PHASE 11 — Mise en Production (branche `staging` → `main`)
 
-**Status**: 🔴 Bloquée jusqu'à Phase 10 complétée  
+**Status**: 🟡 En cours de préparation — Phase 10 validée, production prête pour déploiement  
 **Branche Neon**: `staging` → `main`  
 **Durée estimée**: 1-2 jours  
 **Équipe requise**: 2 DevOps + 1 SRE + 1 Product Owner  
@@ -132,130 +132,30 @@ SQL
 #### 2.3 Appliquer le Seed Production
 
 ```bash
-# Seed de PRODUCTION (données RÉELLES minimales)
-# ⚠️ NE PAS utiliser le seed de staging!
-
-cat > prisma/seed-production.ts << 'EOF'
-import { PrismaClient, Prisma } from '@prisma/client';
-import * as bcrypt from 'bcryptjs';
-
-const prisma = new PrismaClient();
-
-async function main() {
-  console.log('🌱 Seeding production database...');
-
-  // 1. CRÉER UTILISATEURS PRODUCTION (admin + 2 caissiers)
-  
-  // Admin production (utiliser credential vault, pas hardcoder!)
-  const adminPassword = process.env.PROD_ADMIN_PASSWORD!;
-  const admin = await prisma.user.create({
-    data: {
-      email: 'admin@wao-felicitations.com',
-      password: await bcrypt.hash(adminPassword, 10),
-      user_role: 'admin',
-      is_active: true,
-      zone: 'Kinshasa',
-      created_at: new Date()
-    }
-  });
-
-  // Caissier 1
-  const teller1 = await prisma.user.create({
-    data: {
-      email: 'caissier1@wao-felicitations.com',
-      password: await bcrypt.hash(process.env.PROD_TELLER1_PASSWORD!, 10),
-      user_role: 'caissier',
-      is_active: true,
-      zone: 'Kinshasa',
-      created_at: new Date()
-    }
-  });
-
-  // Caissier 2
-  const teller2 = await prisma.user.create({
-    data: {
-      email: 'caissier2@wao-felicitations.com',
-      password: await bcrypt.hash(process.env.PROD_TELLER2_PASSWORD!, 10),
-      user_role: 'caissier',
-      is_active: true,
-      zone: 'Lubumbashi',
-      created_at: new Date()
-    }
-  });
-
-  // 2. CRÉER 3 CAISSES INITIALES
-
-  const caisses = await Promise.all([
-    prisma.cashRegister.create({
-      data: {
-        name: '[PRODUCTION] Caisse Générale - Kinshasa',
-        type: 'generale',
-        balance: new Prisma.Decimal('0'),
-        created_at: new Date()
-      }
-    }),
-    prisma.cashRegister.create({
-      data: {
-        name: '[PRODUCTION] Caisse Produits/Charges',
-        type: 'produits_charges',
-        balance: new Prisma.Decimal('0'),
-        created_at: new Date()
-      }
-    }),
-    prisma.cashRegister.create({
-      data: {
-        name: '[PRODUCTION] Caisse Assurance',
-        type: 'assurance',
-        balance: new Prisma.Decimal('0'),
-        created_at: new Date()
-      }
-    })
-  ]);
-
-  // 3. LOG INITIAL
-  const startLog = await prisma.actionLog.create({
-    data: {
-      user_id: admin.id,
-      user_name: admin.email,
-      user_role: 'admin',
-      action: 'SYSTEM_STARTUP',
-      details: JSON.stringify({
-        event: 'Production database initialized',
-        timestamp: new Date().toISOString(),
-        version: 'Phase 6-8 Complete'
-      }),
-      timestamp: new Date()
-    }
-  });
-
-  console.log(`✅ Production database seeded:`);
-  console.log(`   - Admin: ${admin.email}`);
-  console.log(`   - Tellers: ${teller1.email}, ${teller2.email}`);
-  console.log(`   - Cash registers: ${caisses.length}`);
-  console.log(`   - Start log: ${startLog.id}`);
-}
-
-main().catch(e => {
-  console.error('❌ Seed production failed:', e);
-  process.exit(1);
-});
-EOF
-
-# ⚠️ IMPORTANT: Les mots de passe doivent être dans .env.production
-# Ne JAMAIS les hardcoder!
-
-# Exécuter le seed
-export DATABASE_URL="postgresql://neonuser:password@main-xxxxx.neon.tech:5432/neondb"
-export PROD_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value --secret-id prod/admin-password --query SecretString --output text)
-export PROD_TELLER1_PASSWORD=$(aws secretsmanager get-secret-value --secret-id prod/teller1-password --query SecretString --output text)
-export PROD_TELLER2_PASSWORD=$(aws secretsmanager get-secret-value --secret-id prod/teller2-password --query SecretString --output text)
-
-npx ts-node prisma/seed-production.ts
-
-# ✅ Vérifier
-psql -h main-xxxxx.neon.tech -U neonuser -d neondb -c "SELECT COUNT(*) FROM users;"
-# Doit retourner: 3 (admin + 2 caissiers)
+# Seed production minimal (admin + caisses initiales)
+# Utiliser le script déjà présent dans le dépôt:
+npm run db:seed:prod
 ```
+
+> Notes importantes:
+> - Le script `prisma/seed-production.ts` charge déjà `.env.production`
+> - Il crée un administrateur unique et les trois caisses initiales
+> - Il ne pousse pas de données de test en production
+> - Si le seed a déjà été exécuté, vérifiez simplement que l'admin existe et que la base est cohérente
+
+#### 2.4 Utiliser le script de déploiement
+
+```bash
+# Lancer la procédure de production automatisée
+powershell ./deploy-production.ps1
+```
+
+Ce script réalise les étapes suivantes:
+- build du frontend Vite
+- `npm run db:push:prod` pour appliquer le schéma en production
+- seed production optionnel
+- rappel pour démarrage du backend avec `npm run backend:prod`
+- vérifications post-déploiement
 
 ---
 

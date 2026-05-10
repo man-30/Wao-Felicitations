@@ -1,0 +1,580 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+}
+
+// ─── ENUMS ────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  admin
+  caissier
+  commercial
+}
+
+enum ClientType {
+  apprenant
+  non_apprenant
+  simple
+}
+
+enum AccountType {
+  epargne
+  financement
+}
+
+enum AccountStatus {
+  actif
+  solde
+  ferme
+}
+
+enum TransactionType {
+  depot
+  retrait
+  cotisation
+  paiement
+  transfert
+  frais
+}
+
+enum TransactionStatus {
+  en_attente
+  approuve
+  rejete
+}
+
+enum DocumentStatus {
+  fourni
+  manquant
+  en_attente
+}
+
+enum CotisationAccountStatus {
+  actif
+  solde
+  suspendu
+}
+
+enum FinancementStatus {
+  en_attente_apport
+  actif
+  solde
+}
+
+enum DureeFinancement {
+  mois_4
+  mois_6
+  mois_8
+  mois_10
+}
+
+enum CotisationAllocation {
+  remboursement
+  benefice_societe
+}
+
+enum EmployeePaymentStatus {
+  en_attente
+  traite
+}
+
+enum CaisseType {
+  generale
+  produits_charges
+  assurance
+}
+
+enum ExpenseCategory {
+  carburant_lubrifiant
+  fournitures_bureau
+  fournitures_informatique
+  fournitures_entretien
+  eau
+  electricite
+  loyer
+  entretien_reparation
+  formation_personnel
+  personnel_exterieur
+  publicite
+  communication
+  impots_taxes
+  charges_sociales
+  agios
+  salaire
+  primes
+  autres_charges
+}
+
+enum ProductCategory {
+  vente_livret_individuel
+  deplacement
+  vente_livret_tontine
+  duplicata
+  vente_fourniture_scolaire
+  vente
+  frais_dossiers
+  frais_prestation
+  profits_exceptionnels
+  autres_produits
+}
+
+enum AdminCodeStatus {
+  pending
+  approved
+  rejected
+}
+
+enum InsuranceTransactionType {
+  credit
+  debit
+}
+
+// ─── MODELS ───────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  role      UserRole
+  email     String   @unique
+  password  String
+  zone      String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  // Relations
+  clients                 Client[]
+  apprenants              Apprenant[]
+  nonApprenants           NonApprenant[]
+  cotisations             Cotisation[]
+  transactionsCollected   Transaction[] @relation("collectedBy")
+  transactionsValidated   Transaction[] @relation("validatedBy")
+  expenses                Expense[]
+  accounts                Account[]
+  insuranceTransactions   InsuranceTransaction[]
+  adminCodeRequests       AdminCodeRequest[] @relation("requestedBy")
+  adminCodeApprovals      AdminCodeRequest[] @relation("approvedBy")
+  employeePayments        EmployeePayment[] @relation("employee")
+  employeePaymentsByUser  EmployeePayment[] @relation("paidBy")
+  productRevenues         ProductRevenue[]
+  actionLogs              ActionLog[]
+
+  @@index([email])
+  @@index([role])
+  @@index([zone])
+}
+
+model Client {
+  id                  String   @id @default(cuid())
+  name                String
+  membershipCode      String   @unique
+  accountNumber       String   @unique
+  type                ClientType
+  phone               String
+  address             String?
+  assignedCommercialId String
+  savingsBalance      Decimal  @default(0) @db.Decimal(18, 2)
+  financingBalance    Decimal  @default(0) @db.Decimal(18, 2)
+  createdAt           DateTime @default(now())
+
+  // Relations
+  commercial         User @relation(fields: [assignedCommercialId], references: [id])
+  apprenant          Apprenant?
+  nonApprenant       NonApprenant?
+  accounts           Account[]
+  transactions       Transaction[]
+  schoolDebts        SchoolDebt[]
+  insuranceTransactions InsuranceTransaction[]
+
+  @@index([membershipCode])
+  @@index([accountNumber])
+  @@index([assignedCommercialId])
+  @@index([type])
+}
+
+model Apprenant {
+  id              String   @id @default(cuid())
+  clientId        String   @unique
+  studentName     String
+  studentBirthDate DateTime?
+  schoolName      String
+  schoolLevel     String
+  schoolYear      String
+  guardianId      String
+  cautionId       String
+  documents       Json     // Array of {key, label, status}
+  createdBy       String
+  createdAt       DateTime @default(now())
+
+  // Relations
+  client          Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  guardian        Guardian @relation(fields: [guardianId], references: [id])
+  caution         Caution  @relation(fields: [cautionId], references: [id])
+  createdByUser   User     @relation(fields: [createdBy], references: [id])
+  tontineAccounts TontineAccount[]
+
+  @@index([clientId])
+  @@index([schoolName])
+}
+
+model Guardian {
+  id           String   @id @default(cuid())
+  fullName     String
+  phone        String
+  relationship String
+  idNumber     String?
+  createdAt    DateTime @default(now())
+
+  apprenants   Apprenant[]
+
+  @@index([phone])
+}
+
+model Caution {
+  id        String   @id @default(cuid())
+  fullName  String
+  phone     String
+  idNumber  String?
+  profession String?
+  createdAt DateTime @default(now())
+
+  apprenants Apprenant[]
+
+  @@index([phone])
+}
+
+model TontineAccount {
+  id                  String   @id @default(cuid())
+  apprenantId         String
+  numero              String   @unique
+  schoolName          String
+  schoolLevel         String
+  fraisScolarite      Decimal  @db.Decimal(18, 2)
+  grilleNumero        Int
+  fraisDossier        Decimal  @db.Decimal(18, 2)
+  fraisAssurance      Decimal  @default(0) @db.Decimal(18, 2)
+  fraisPrestation     Decimal  @db.Decimal(18, 2)
+  cotisationJournaliere Decimal @db.Decimal(18, 2)
+  totalCapital        Decimal  @db.Decimal(18, 2)
+  totalCotise         Decimal  @default(0) @db.Decimal(18, 2)
+  totalBeneficeCases  Decimal  @default(0) @db.Decimal(18, 2)
+  totalJours          Int
+  status              CotisationAccountStatus @default(actif)
+  adhesionPaid        Decimal  @default(0) @db.Decimal(18, 2)
+  carnetPaid          Decimal  @default(0) @db.Decimal(18, 2)
+  createdAt           DateTime @default(now())
+
+  // Relations
+  apprenant   Apprenant @relation(fields: [apprenantId], references: [id], onDelete: Cascade)
+  cotisations Cotisation[]
+  accounts    Account[]
+
+  @@index([apprenantId])
+  @@index([grilleNumero])
+  @@index([status])
+}
+
+model Cotisation {
+  id                String   @id @default(cuid())
+  tontineAccountId  String
+  amount            Decimal  @db.Decimal(18, 2)
+  date              DateTime
+  cycleMonth        Int?
+  cycleDay          Int?
+  allocation        CotisationAllocation?
+  recordedBy        String
+  notes             String?
+  createdAt         DateTime @default(now())
+
+  // Relations
+  tontineAccount TontineAccount @relation(fields: [tontineAccountId], references: [id], onDelete: Cascade)
+  recordedByUser User @relation(fields: [recordedBy], references: [id])
+
+  @@index([tontineAccountId])
+  @@index([date])
+  @@index([allocation])
+}
+
+model NonApprenant {
+  id          String   @id @default(cuid())
+  clientId    String   @unique
+  fullName    String
+  phone       String
+  idNumber    String
+  documents   Json     // {pieceIdentite: bool, photos: bool}
+  adhesionPaid Boolean @default(false)
+  carnetPaid  Boolean  @default(false)
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  // Relations
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdByUser User   @relation(fields: [createdBy], references: [id])
+  financements FinancementNonApprenant[]
+
+  @@index([clientId])
+  @@index([idNumber])
+}
+
+model FinancementNonApprenant {
+  id                  String   @id @default(cuid())
+  nonApprenantId      String
+  bienFinance         String
+  valeurBien          Decimal  @db.Decimal(18, 2)
+  apportPersonnel     Decimal  @db.Decimal(18, 2)
+  apportPourcentage   Decimal? @db.Decimal(5, 2)
+  montantFinance      Decimal  @db.Decimal(18, 2)
+  dureeChoisie        DureeFinancement
+  grilleNumero        Int
+  fraisDossier        Decimal  @db.Decimal(18, 2)
+  fraisPrestation     Decimal  @db.Decimal(18, 2)
+  cotisationJournaliere Decimal @db.Decimal(18, 2)
+  totalARembourser    Decimal  @db.Decimal(18, 2)
+  totalCotise         Decimal  @default(0) @db.Decimal(18, 2)
+  totalBeneficeCases  Decimal  @default(0) @db.Decimal(18, 2)
+  totalCases          Int
+  status              FinancementStatus @default(en_attente_apport)
+  createdAt           DateTime @default(now())
+
+  // Relations
+  nonApprenant NonApprenant @relation(fields: [nonApprenantId], references: [id], onDelete: Cascade)
+  accounts     Account[]
+
+  @@index([nonApprenantId])
+  @@index([dureeChoisie])
+  @@index([status])
+}
+
+model Account {
+  id                String   @id @default(cuid())
+  clientId          String
+  type              AccountType
+  balance           Decimal  @default(0) @db.Decimal(18, 2)
+  linkedAccountId   String?
+  accountNumber     String?  @unique
+  label             String?
+  status            AccountStatus @default(actif)
+  principalAmount   Decimal? @db.Decimal(18, 2)
+  dossierFee        Decimal? @db.Decimal(18, 2)
+  insuranceFee      Decimal? @db.Decimal(18, 2)
+  prestationFee     Decimal? @db.Decimal(18, 2)
+  dailyContribution Decimal? @db.Decimal(18, 2)
+  totalDue          Decimal? @db.Decimal(18, 2)
+  totalPaid         Decimal? @db.Decimal(18, 2)
+  residualBalance   Decimal? @db.Decimal(18, 2)
+  createdBy         String
+  createdByName     String
+  notes             String?
+  createdAt         DateTime @default(now())
+
+  // Relations
+  client              Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdByUser       User   @relation(fields: [createdBy], references: [id])
+  transactions        Transaction[]
+  insuranceTransactions InsuranceTransaction[]
+  tontineAccount      TontineAccount? @relation(fields: [tontineAccountId], references: [id])
+  tontineAccountId    String?
+  financing           FinancementNonApprenant? @relation(fields: [financingId], references: [id])
+  financingId         String?
+
+  @@index([clientId])
+  @@index([type])
+  @@index([status])
+}
+
+model Transaction {
+  id              String   @id @default(cuid())
+  clientId        String
+  clientName      String
+  accountId       String?
+  type            TransactionType
+  amount          Decimal  @db.Decimal(18, 2)
+  date            DateTime
+  collectedBy     String
+  collectedByName String
+  validatedBy     String?
+  validatedByName String?
+  status          TransactionStatus @default(en_attente)
+  receiptNumber   String?  @unique
+  description     String?
+  createdAt       DateTime @default(now())
+
+  // Relations
+  client              Client @relation(fields: [clientId], references: [id])
+  account             Account? @relation(fields: [accountId], references: [id])
+  collectedByUser     User   @relation("collectedBy", fields: [collectedBy], references: [id])
+  validatedByUser     User?  @relation("validatedBy", fields: [validatedBy], references: [id])
+  actionLogs          ActionLog[]
+
+  @@index([clientId])
+  @@index([date])
+  @@index([status])
+  @@index([type])
+  @@index([collectedBy])
+  @@index([validatedBy])
+}
+
+model InsuranceTransaction {
+  id            String   @id @default(cuid())
+  amount        Decimal  @db.Decimal(18, 2)
+  type          InsuranceTransactionType
+  description   String
+  clientId      String?
+  clientName    String?
+  accountId     String?
+  date          DateTime
+  operatedBy    String
+  operatedByName String
+  createdAt     DateTime @default(now())
+
+  // Relations
+  client    Client? @relation(fields: [clientId], references: [id])
+  account   Account? @relation(fields: [accountId], references: [id])
+  operator  User    @relation(fields: [operatedBy], references: [id])
+
+  @@index([date])
+  @@index([clientId])
+  @@index([operatedBy])
+}
+
+model SchoolDebt {
+  id          String   @id @default(cuid())
+  clientId    String
+  schoolName  String
+  debtAmount  Decimal  @db.Decimal(18, 2)
+  paidAmount  Decimal  @default(0) @db.Decimal(18, 2)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  // Relations
+  client      Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([schoolName])
+}
+
+model Expense {
+  id            String   @id @default(cuid())
+  category      ExpenseCategory
+  amount        Decimal  @db.Decimal(18, 2)
+  description   String?
+  date          DateTime
+  recordedBy    String
+  recordedByName String
+  createdAt     DateTime @default(now())
+
+  // Relations
+  recordedByUser User @relation(fields: [recordedBy], references: [id])
+
+  @@index([date])
+  @@index([category])
+  @@index([recordedBy])
+}
+
+model Produit {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  description String?
+  category  ProductCategory
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([category])
+}
+
+model CashRegister {
+  id        String   @id @default(cuid())
+  type      CaisseType
+  balance   Decimal  @default(0) @db.Decimal(18, 2)
+  lastMovement DateTime @default(now())
+  notes     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  productRevenues ProductRevenue[]
+
+  @@index([type])
+  @@index([lastMovement])
+}
+
+model ProductRevenue {
+  id              String   @id @default(cuid())
+  cashRegisterId  String
+  amount          Decimal  @db.Decimal(18, 2)
+  category        ProductCategory
+  description     String?
+  recordedBy      String
+  recordedByName  String
+  date            DateTime
+  createdAt       DateTime @default(now())
+
+  // Relations
+  cashRegister    CashRegister @relation(fields: [cashRegisterId], references: [id], onDelete: Cascade)
+  user            User @relation(fields: [recordedBy], references: [id])
+
+  @@index([cashRegisterId])
+  @@index([category])
+  @@index([recordedBy])
+  @@index([date])
+}
+
+model AdminCodeRequest {
+  id        String   @id @default(cuid())
+  userId    String
+  code      String
+  purpose   String
+  status    AdminCodeStatus @default(pending)
+  requestedAt DateTime @default(now())
+  approvedBy String?
+  approvedAt DateTime?
+
+  // Relations
+  user      User @relation("requestedBy", fields: [userId], references: [id])
+  approver  User? @relation("approvedBy", fields: [approvedBy], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([approvedBy])
+}
+
+model EmployeePayment {
+  id          String   @id @default(cuid())
+  userId      String
+  amount      Decimal  @db.Decimal(18, 2)
+  period      String   // "2026-01"
+  date        DateTime
+  paidBy      String
+  paidByName  String
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  // Relations
+  employee    User @relation("employee", fields: [userId], references: [id])
+  paidByUser  User @relation("paidBy", fields: [paidBy], references: [id])
+
+  @@index([userId])
+  @@index([period])
+  @@index([date])
+}
+
+model ActionLog {
+  id        String   @id @default(cuid())
+  userId    String
+  userName  String
+  userRole  UserRole
+  action    String
+  details   String
+  transactionId String?
+  timestamp DateTime @default(now())
+
+  // Relations
+  user        User         @relation(fields: [userId], references: [id])
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
+
+  @@index([userId])
+  @@index([userRole])
+  @@index([timestamp])
+  @@index([action])
+}

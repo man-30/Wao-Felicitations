@@ -3,6 +3,7 @@ import { User, UserRole } from '../types';
 import { db } from '../localStorageDB';
 import { Lock, UserCheck, Shield, Wallet, Users } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import api from '../config/api';
 
 interface LoginProps {
   onLoginSuccess: (user: User) => void;
@@ -12,26 +13,56 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [useBackend, setUseBackend] = useState(true);
 
   const users = db.getUsers();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = users.find(u => u.email === email && u.password === password);
-    if (user) {
-      if (user.isActive === false) {
-        setError('Ce compte est désactivé. Contactez un administrateur.');
-        return;
+    setError('');
+    setLoading(true);
+
+    try {
+      if (useBackend) {
+        // API Backend authentication
+        const response = await api.login(email, password);
+        localStorage.setItem('auth_token', response.token);
+        localStorage.setItem('current_user', JSON.stringify(response.user));
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+        onLoginSuccess(response.user);
+      } else {
+        // LocalStorage fallback
+        const user = users.find(u => u.email === email && u.password === password);
+        if (user) {
+          if (user.isActive === false) {
+            setError('Ce compte est désactivé. Contactez un administrateur.');
+            return;
+          }
+          db.addLog(user.id, user.name, user.role, 'Connexion', 'Utilisateur connecté avec succès');
+          confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 }
+          });
+          onLoginSuccess(user);
+        } else {
+          setError('Identifiants incorrects');
+        }
       }
-      db.addLog(user.id, user.name, user.role, 'Connexion', 'Utilisateur connecté avec succès');
-      confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 }
-      });
-      onLoginSuccess(user);
-    } else {
-      setError('Identifiants incorrects');
+    } catch (err: any) {
+      setError(err.message || 'Erreur de connexion');
+      // Fallback to localStorage on network error
+      if (err.message.includes('fetch')) {
+        setUseBackend(false);
+        setError('Backend indisponible. Mode hors ligne activé.');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -40,6 +71,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       setError('Ce compte est désactivé.');
       return;
     }
+    localStorage.removeItem('auth_token');
+    localStorage.setItem('current_user', JSON.stringify(user));
     db.addLog(user.id, user.name, user.role, 'Connexion', `Connexion rapide en tant que ${user.name}`);
     confetti({
       particleCount: 50,

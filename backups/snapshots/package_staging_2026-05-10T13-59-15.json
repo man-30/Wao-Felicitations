@@ -1,26 +1,6 @@
 {
   "name": "react-vite-tailwind",
-  "private": true,
   "version": "0.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "backend:dev": "npx tsx backend-express-complete.ts",
-    "backend:staging": "npx tsx backend-express-complete.ts",
-    "backend:prod": "npx tsx backend-production.ts",
-    "start:prod": "npm run backend:prod",
-    "db:push": "prisma db push",
-    "db:migrate": "prisma migrate dev",
-    "db:studio": "prisma studio",
-    "db:seed": "node prisma/seed.js",
-    "db:seed:staging": "npx tsx prisma/seed-staging.ts",
-    "db:seed:prod": "npx tsx prisma/seed-production.ts",
-    "db:reset": "prisma migrate reset --force",
-    "db:push:prod": "npx tsx scripts/db-push-prod.ts",
-    "test:api": "npx tsx test-api-endpoints.ts"
-  },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
     "@prisma/adapter-pg": "^7.8.0",

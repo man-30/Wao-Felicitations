@@ -1,0 +1,23 @@
+{
+  "snapshotDate": "2026-05-10T13:59:15.691Z",
+  "environment": "PRODUCTION (Main)",
+  "tag": "prod",
+  "endpoint": "ep-dawn-hill-amvkncy2",
+  "database": "neondb",
+  "gitCommit": "95c0f8de0719e41b389b1d9318d24170fcbfbc00",
+  "files": {
+    "schema": "schema_prod_2026-05-10T13-59-15.prisma",
+    "migrations": "migrations_prod_2026-05-10T13-59-15.txt",
+    "env": "env_prod_2026-05-10T13-59-15.txt",
+    "pkglock": "package_prod_2026-05-10T13-59-15.json",
+    "migLock": "migration_lock_prod_2026-05-10T13-59-15.toml"
+  },
+  "rollbackGuide": "See PHASE_11_ACTION_PLAN.md - Phase 3 Rollback",
+  "instructions": [
+    "1. Restore: npx prisma migrate reset --force",
+    "2. Deploy migrations: npx prisma migrate deploy",
+    "3. Restore seed: npm run db:seed:prod",
+    "4. Restart backend: npm run backend:prod"
+  ],
+  "createdBy": "scripts/rollback-snapshot.mjs"
+}

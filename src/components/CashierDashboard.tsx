@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { db } from '../localStorageDB';
+import api from '../config/api';
 import { Client, Expense, Transaction, User } from '../types';
 import InsuranceFundCard from './InsuranceFundCard';
 import {
@@ -39,6 +40,14 @@ export default function CashierDashboard({ currentUser }: CashierDashboardProps)
   const [transactions, setTransactions] = useState<Transaction[]>(db.getTransactions());
   const [expenses, setExpenses] = useState<Expense[]>(db.getExpenses());
   const [employeePayments, setEmployeePayments] = useState(db.getEmployeePayments());
+  const [dashboardStats, setDashboardStats] = useState<{
+    users: number;
+    clients: number;
+    transactions: number;
+    tontineAccounts: number;
+    caisses: { id: string; type: string; balance: string }[];
+  } | null>(null);
+  const [statsError, setStatsError] = useState('');
 
   // Synchronisation temps réel — polling 3s
   useEffect(() => {
@@ -49,6 +58,19 @@ export default function CashierDashboard({ currentUser }: CashierDashboardProps)
       setEmployeePayments(db.getEmployeePayments());
     }, 3000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        const result = await api.getDashboardStats();
+        setDashboardStats(result);
+      } catch (err: any) {
+        setStatsError(err.message || 'Impossible de charger les statistiques backend.');
+      }
+    };
+
+    loadStats();
   }, []);
 
   const refDate = useMemo(() => {
@@ -126,8 +148,24 @@ export default function CashierDashboard({ currentUser }: CashierDashboardProps)
               Gardien de la cohérence financière. Suivi de la caisse, contrôle des dépôts, exécution des retraits et gestion des charges.
             </p>
           </div>
-          <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200">
-            <Clock className="h-4 w-4 text-indigo-300" /> Date de réf.: {today}
+          <div className="space-y-3 text-right">
+            <div className="flex items-center justify-end gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200">
+              <Clock className="h-4 w-4 text-indigo-300" /> Date de réf.: {today}
+            </div>
+            <div className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-semibold ${dashboardStats ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
+              {dashboardStats ? 'Backend connecté' : 'Backend indisponible'}
+            </div>
+            {dashboardStats ? (
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-slate-200">
+                <div className="grid grid-cols-3 gap-2">
+                  <div><span className="font-semibold text-white">{dashboardStats.clients}</span> clients</div>
+                  <div><span className="font-semibold text-white">{dashboardStats.transactions}</span> transactions</div>
+                  <div><span className="font-semibold text-white">{dashboardStats.caisses.length}</span> caisses</div>
+                </div>
+              </div>
+            ) : statsError ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{statsError}</div>
+            ) : null}
           </div>
         </div>
       </section>

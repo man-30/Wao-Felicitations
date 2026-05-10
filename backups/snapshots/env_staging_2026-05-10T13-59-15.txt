@@ -1,0 +1,17 @@
+# DEVELOPMENT ENVIRONMENT
+NODE_ENV=development
+PORT=3001
+
+# Neon Database (DEV BRANCH)
+DATABASE_URL="[REDACTED]"
+DATABASE_URL_POOLED="[REDACTED]"
+
+# Security (Dev - NOT for production!)
+JWT_SECRET="[REDACTED]"
+ENCRYPTION_KEY="[REDACTED]"
+
+# CORS
+CORS_ORIGIN="http://localhost:3000,http://localhost:5173"
+
+# Logging
+LOG_LEVEL=info

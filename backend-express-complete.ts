@@ -677,6 +677,16 @@ app.get('/api/audit-logs/user/:userId', authenticateToken, requireRole('admin'),
       },
       orderBy: { timestamp: 'desc' },
       take: 100,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+          },
+        },
+      },
     })
 
     res.json({
@@ -699,15 +709,19 @@ app.get('/api/audit-logs/user/:userId', authenticateToken, requireRole('admin'),
  */
 app.get('/api/dashboard/stats', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const [usersCount, clientsCount, transactionsCount, tontineAccountsCount] = await Promise.all([
+    const [usersCount, clientsCount, transactionsCount, tontineAccountsCount, caisses] = await Promise.all([
       prisma.user.count(),
       prisma.client.count(),
       prisma.transaction.count(),
       prisma.tontineAccount.count(),
+      prisma.cashRegister.findMany({
+        select: {
+          id: true,
+          type: true,
+          balance: true,
+        },
+      }),
     ])
-
-    // Récupérer les totaux par caisse
-    const caisses = await prisma.cashRegister.findMany()
 
     res.json({
       users: usersCount,

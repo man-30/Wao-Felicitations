@@ -154,11 +154,17 @@
 ### Steps:
 1. T-24h: Gel du code, snapshot backup
 2. T-2h: Appliquer migrations prod
-3. T-1h: Deploy app (PM2)
+3. T-1h: Déployer l'app avec `deploy-production.ps1` ou `npm run backend:prod`
 4. T-30m: Smoke tests
 5. T-0: GO/NO-GO vote
 6. T+0h: **LIVE** 🎉
 7. T+24h-72h: Monitoring 24/7
+
+**Notes de livraison**:
+- Frontend / API intégrés via `src/config/api.ts`
+- Authentification backend utilisée par `src/components/Login.tsx`
+- Local `.env.local` pour le développement frontend (`VITE_API_URL=http://localhost:3001`)
+- Production startup: `npm run backend:prod`
 
 **Document**: [PHASE_11_PRODUCTION.md](./PHASE_11_PRODUCTION.md) (1,200+ lignes, runbook complet)
 

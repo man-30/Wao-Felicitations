@@ -512,6 +512,16 @@ export async function getActionLogs(
     orderBy: { timestamp: 'desc' },
     take: filters?.limit || 100,
     skip: filters?.offset || 0,
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+        },
+      },
+    },
   })
 }
 
