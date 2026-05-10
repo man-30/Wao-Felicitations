@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { User, UserRole } from '../types';
 import { db } from '../localStorageDB';
-import { Lock, UserCheck, Shield, Wallet, Users } from 'lucide-react';
+import { Lock, Shield, Wallet } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import api from '../config/api';
 
@@ -13,7 +13,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
   const [useBackend, setUseBackend] = useState(true);
 
   const users = db.getUsers();
@@ -21,7 +20,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
 
     try {
       if (useBackend) {
@@ -61,35 +59,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         setUseBackend(false);
         setError('Backend indisponible. Mode hors ligne activé.');
       }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleQuickLogin = (user: User) => {
-    if (user.isActive === false) {
-      setError('Ce compte est désactivé.');
-      return;
-    }
-    localStorage.removeItem('auth_token');
-    localStorage.setItem('current_user', JSON.stringify(user));
-    db.addLog(user.id, user.name, user.role, 'Connexion', `Connexion rapide en tant que ${user.name}`);
-    confetti({
-      particleCount: 50,
-      spread: 50,
-      origin: { y: 0.6 }
-    });
-    onLoginSuccess(user);
-  };
-
-  const getRoleBadge = (role: UserRole) => {
-    switch (role) {
-      case 'admin':
-        return <span className="px-2 py-1 text-xs font-semibold rounded bg-red-100 text-red-700 flex items-center gap-1"><Shield className="w-3 h-3" /> Admin</span>;
-      case 'caissier':
-        return <span className="px-2 py-1 text-xs font-semibold rounded bg-blue-100 text-blue-700 flex items-center gap-1"><Wallet className="w-3 h-3" /> Caissier</span>;
-      case 'commercial':
-        return <span className="px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-700 flex items-center gap-1"><Users className="w-3 h-3" /> Commercial</span>;
     }
   };
 
@@ -160,34 +129,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           </div>
         </form>
 
-        <div className="mt-8">
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">Accès rapide (Mode MVP)</span>
-            </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-1 gap-3">
-            {users.map(user => (
-              <button
-                key={user.id}
-                onClick={() => handleQuickLogin(user)}
-                className="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors text-left"
-              >
-                <div>
-                  <p className="text-sm font-semibold text-gray-800">{user.name}</p>
-                  <p className="text-xs text-gray-500">{user.email}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {getRoleBadge(user.role)}
-                  <UserCheck className="w-4 h-4 text-gray-400" />
-                </div>
-              </button>
-            ))}
-          </div>
+        <div className="mt-8 text-sm text-gray-600 border-t border-gray-200 pt-4">
+          <p className="text-center">Connectez-vous avec vos identifiants professionnels pour utiliser l’application.</p>
+          <p className="text-center mt-2 text-xs text-gray-400">Aucun compte de démonstration n’est exposé ici.</p>
         </div>
       </div>
     </div>
