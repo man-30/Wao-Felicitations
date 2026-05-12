@@ -1,0 +1,2 @@
+Set objShell = CreateObject("Shell.Application")
+objShell.ShellExecute "cmd.exe", "/c cd /d ""c:\Wao Felicitations"" && schtasks /delete /tn ""Wao-Felicitations-Backend"" /f >nul 2>&1 && schtasks /create /tn ""Wao-Felicitations-Backend"" /tr ""cmd.exe /c """"c:\Wao Felicitations\start-backend.bat"""""""" /sc onstart /ru SYSTEM /rl HIGHEST /f && echo. && echo SUCCESS: Task created! && pause", "", "runas"
