@@ -3,7 +3,11 @@
  * Centralized API client for backend communication
  */
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// Determine API URL based on environment
+const API_URL = import.meta.env.VITE_API_URL || 
+  (import.meta.env.MODE === 'production' 
+    ? 'https://wao-felicitations-api.fly.dev'
+    : 'http://localhost:3001');
 
 export const api = {
   baseURL: API_URL,
