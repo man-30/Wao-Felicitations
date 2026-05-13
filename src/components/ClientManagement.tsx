@@ -663,13 +663,29 @@ export default function ClientManagement({ currentUser }: Props) {
         </div>
       )}
       {backendError && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 flex items-center gap-3 shadow-sm">
-          <div className="rounded-full bg-amber-100 p-2 text-amber-600">
-            <AlertTriangle className="h-5 w-5" />
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-sm space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="rounded-full bg-amber-100 p-2 text-amber-600">
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-amber-900">Information de connexion</p>
+              <p className="text-xs text-amber-800 opacity-80">{backendError}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-bold text-amber-900">Information de connexion</p>
-            <p className="text-xs text-amber-800 opacity-80">{backendError}</p>
+          <div className="flex gap-2 pl-12">
+            <button 
+              onClick={() => fetchData()}
+              className="text-xs px-3 py-1.5 bg-amber-200 text-amber-900 rounded-lg hover:bg-amber-300 transition-colors font-bold"
+            >
+              Réessayer la connexion
+            </button>
+            <button 
+              onClick={() => alert(`Client List Endpoint: ${api.baseURL}/api/clients\nErreur: ${backendError}`)}
+              className="text-xs px-3 py-1.5 border border-amber-300 text-amber-900 rounded-lg hover:bg-amber-100 transition-colors font-medium"
+            >
+              Afficher les détails techniques
+            </button>
           </div>
         </div>
       )}

@@ -27,8 +27,14 @@ export const api = {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Request failed' }));
-      throw new Error(error.error || `HTTP ${response.status}`);
+      const errorText = await response.text();
+      let errorJson;
+      try {
+        errorJson = JSON.parse(errorText);
+      } catch (e) {
+        errorJson = { error: `HTTP ${response.status}: ${errorText.slice(0, 50)}...` };
+      }
+      throw new Error(errorJson.error || `Erreur ${response.status} sur ${endpoint}`);
     }
 
     return response.json();

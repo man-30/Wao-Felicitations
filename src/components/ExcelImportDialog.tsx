@@ -28,7 +28,7 @@ export default function ExcelImportDialog({ onClose, onImportSuccess }: ExcelImp
   const [data, setData] = useState<ValidationResult[]>([]);
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [report, setReport] = useState<any>(null);
+  const [showRawData, setShowRawData] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const findKey = (row: any, ...aliases: string[]) => {
@@ -48,21 +48,46 @@ export default function ExcelImportDialog({ onClose, onImportSuccess }: ExcelImp
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const data = evt.target?.result;
-        const wb = XLSX.read(data, { type: 'array' });
+        const buf = evt.target?.result;
+        const wb = XLSX.read(buf, { type: 'array' });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const rawData = XLSX.utils.sheet_to_json(ws) as any[];
+        
+        // Get data as array of arrays to find the header row
+        const aoa = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+        if (aoa.length === 0) throw new Error("Le fichier est vide.");
 
-        const mappedData: ValidationResult[] = rawData.map((row: any) => {
+        // Discovery algorithm: find row with most keyword matches
+        const keywords = ['nom', 'compte', 'tel', 'phone', 'telephone', 'solde', 'balance', 'type'];
+        let headerRowIndex = 0;
+        let maxMatches = 0;
+
+        for (let i = 0; i < Math.min(aoa.length, 20); i++) {
+          const row = aoa[i];
+          if (!Array.isArray(row)) continue;
+          const matches = row.filter(cell => 
+            typeof cell === 'string' && 
+            keywords.some(kw => cell.toLowerCase().includes(kw))
+          ).length;
+          
+          if (matches > maxMatches) {
+            maxMatches = matches;
+            headerRowIndex = i;
+          }
+        }
+
+        // Parse with identified header row
+        const jsonData = XLSX.utils.sheet_to_json(ws, { range: headerRowIndex }) as any[];
+
+        const mappedData: ValidationResult[] = jsonData.map((row: any) => {
           const importRow: ImportRow = {
-            name: findKey(row, 'Nom Complet', 'Nom', 'Full Name') || '',
+            name: findKey(row, 'Nom Complet', 'Nom', 'Full Name', 'Nom et Prénoms') || '',
             type: findKey(row, 'Type', 'Client Type') || 'simple',
-            phone: String(findKey(row, 'Téléphone', 'Tél', 'Phone', 'Tel') || ''),
-            address: findKey(row, 'Adresse', 'Address') || '',
-            accountNumber: findKey(row, 'N° De Compte', 'Compte', 'Account Number', 'Account') || '',
-            commercialName: findKey(row, 'Commercial', 'Agent') || '',
-            initialBalance: Number(findKey(row, 'Solde Initial', 'Solde', 'Initial Balance', 'Balance') || 0),
+            phone: String(findKey(row, 'Téléphone', 'Tél', 'Phone', 'Tel', 'Contact') || ''),
+            address: findKey(row, 'Adresse', 'Address', 'Résidence') || '',
+            accountNumber: findKey(row, 'N° De Compte', 'Compte', 'N° Compte', 'Account Number', 'Account', 'Code') || '',
+            commercialName: findKey(row, 'Commercial', 'Agent', 'Promoteur', 'Vendeur') || '',
+            initialBalance: Number(findKey(row, 'Solde Initial', 'Solde', 'Initial Balance', 'Balance', 'Montant') || 0),
           };
 
           let status: 'valid' | 'invalid' | 'warning' = 'valid';
@@ -70,16 +95,16 @@ export default function ExcelImportDialog({ onClose, onImportSuccess }: ExcelImp
 
           if (!importRow.name || !importRow.phone || !importRow.accountNumber) {
             status = 'invalid';
-            message = 'Champs obligatoires manquants (Nom, Tél, Compte)';
+            message = `Manquant: ${!importRow.name ? 'Nom ' : ''}${!importRow.phone ? 'Tél ' : ''}${!importRow.accountNumber ? 'Compte' : ''}`;
           }
 
           return { row: importRow, status, message };
         });
 
         setData(mappedData);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error parsing excel:', err);
-        alert('Erreur lors de la lecture du fichier Excel.');
+        alert(`Erreur parsing: ${err.message}`);
       } finally {
         setIsParsing(false);
       }
@@ -219,17 +244,27 @@ export default function ExcelImportDialog({ onClose, onImportSuccess }: ExcelImp
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-slate-900">Aperçu des données ({data.length} lignes)</h3>
-                <button 
-                  onClick={() => setData([])}
-                  className="text-sm font-semibold text-rose-600 hover:text-rose-700"
-                >
-                  Annuler
-                </button>
-              </div>
+              {data.length > 0 && (
+                <div className="flex items-center justify-between mt-4 mb-2">
+                  <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <FileSpreadsheet className="h-4 w-4" /> Aperçu des données ({data.length} lignes)
+                  </h4>
+                  <button 
+                    onClick={() => setShowRawData(!showRawData)}
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 underline flex items-center gap-1"
+                  >
+                    {showRawData ? "Masquer les données brutes" : "Voir les données JSON brutes"}
+                  </button>
+                </div>
+              )}
 
-              <div className="overflow-hidden rounded-2xl border border-slate-200">
+              {showRawData && data.length > 0 && (
+                <div className="mb-4 max-h-48 overflow-auto rounded-xl bg-slate-900 p-4 text-[10px] text-slate-300 font-mono border border-slate-800">
+                  <pre>{JSON.stringify(data.map(d => d.row), null, 2)}</pre>
+                </div>
+              )}
+
+              <div className="max-h-96 overflow-auto rounded-xl border border-slate-200">
                 <table className="min-w-full divide-y divide-slate-200 text-sm">
                   <thead className="bg-slate-50 text-slate-600">
                     <tr>
