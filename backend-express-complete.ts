@@ -61,10 +61,19 @@ const app = express()
 // CONFIGURATION
 // ───────────────────────────────────────────────────────────────────────────
 
-app.use(cors())
+app.use(cors({
+  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
+  credentials: true,
+}))
 app.use(express.json())
 
 const PORT = process.env.PORT || 3000
+
+// Middleware de logging des requêtes
+app.use((req: Request, res: Response, next: NextFunction) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - IP: ${req.ip} - Origin: ${req.get('origin')}`)
+  next()
+})
 
 // ───────────────────────────────────────────────────────────────────────────
 // ROOT ROUTE
@@ -238,6 +247,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     // Logger la connexion
     await logLogin(user.id, user.name, user.role, req.ip)
 
+    console.log(`✅ Login success for ${email} - Role: ${user.role}`)
     res.json({
       token,
       user: {
@@ -249,10 +259,10 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       },
     })
   } catch (error: any) {
-    console.error('Login error:', error)
+    console.error(`❌ Login error for ${req.body?.email}:`, error)
     res.status(500).json({
       error: 'Login failed',
-      message: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      message: error.message,
     })
   }
 })
