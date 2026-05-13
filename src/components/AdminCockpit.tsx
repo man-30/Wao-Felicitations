@@ -103,7 +103,27 @@ export default function AdminCockpit({ currentUser }: AdminCockpitProps) {
   const [codeRequests, setCodeRequests] = useState<AdminCodeRequest[]>(refreshAdminCodeRequests());
   const [employeePayments, setEmployeePayments] = useState<EmployeePayment[]>(db.getEmployeePayments());
 
-  // Synchronisation temps réel complète — polling 3s
+  // Synchronisation avec le backend au montage
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [apiUsers, apiClients] = await Promise.all([
+          api.getUsers(),
+          api.getClients()
+        ]);
+        setUsers(apiUsers);
+        setClients(apiClients);
+        // Sync with local DB for consistency in other components
+        db.saveUsers(apiUsers);
+        db.saveClients(apiClients);
+      } catch (err) {
+        console.error('Failed to sync admin data with backend:', err);
+      }
+    };
+    loadData();
+  }, []);
+
+  // Synchronisation temps réel complète — polling 3s (pour les logs et codes)
   useEffect(() => {
     const interval = setInterval(() => {
       // Payments
@@ -113,12 +133,8 @@ export default function AdminCockpit({ currentUser }: AdminCockpitProps) {
         const b = JSON.stringify(freshPay.map(p => p.id + p.status));
         return a !== b ? freshPay : prev;
       });
-      // Transactions + balances
-      setTransactions(db.getTransactions());
-      setExpenses(db.getExpenses());
-      setClients(db.getClients());
+      // On continue de poller les logs et codes qui sont souvent locaux ou spécifiques
       setLogs(db.getLogs());
-      setUsers(db.getUsers());
       setCodeRequests(refreshAdminCodeRequests());
     }, 3000);
     return () => clearInterval(interval);

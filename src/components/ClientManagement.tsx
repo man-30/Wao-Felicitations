@@ -5,9 +5,10 @@ import api from '../config/api';
 import { calculerGrille, calculerGrilleNonApprenant } from '../grille';
 import {
   UserPlus, Search, GraduationCap, UserCheck, Briefcase,
-  History, ArrowRightLeft, X, Pencil, Eye, Lock, PiggyBank, HandCoins, ArrowRight, Printer
+  History, ArrowRightLeft, X, Pencil, Eye, Lock, PiggyBank, HandCoins, ArrowRight, Printer, FileSpreadsheet
 } from 'lucide-react';
 import { requestAdminCode, validateAndConsumeAdminCode } from '../adminCodes';
+import ExcelImportDialog from './ExcelImportDialog';
 
 interface Props { currentUser: User; }
 
@@ -90,6 +91,10 @@ export default function ClientManagement({ currentUser }: Props) {
   const [transferReason, setTransferReason] = useState('Transfert surplus remboursement → Épargne');
 
   const [msg, setMsg] = useState({ text: '', type: '' });
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [showEpargnantForm, setShowEpargnantForm] = useState(false);
+  const [isEpargnantLoading, setIsEpargnantLoading] = useState(false);
+  const isAdmin = currentUser.role === 'admin';
   const isCashier = currentUser.role === 'caissier';
 
   const filteredClients = clients.filter(c => {
@@ -471,8 +476,106 @@ export default function ClientManagement({ currentUser }: Props) {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h2 className="text-2xl font-bold text-slate-800">Gestion des Clients</h2>
-        <span className="text-xs font-semibold text-slate-400">{currentUser.role === 'commercial' ? 'Visibilité restreinte' : 'Accès complet — caissier'}</span>
+        <div className="flex flex-wrap gap-2">
+          {isAdmin && (
+            <button 
+              onClick={() => setShowImportDialog(true)}
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 transition-all shadow-sm"
+            >
+              <FileSpreadsheet className="h-4 w-4" /> Importer depuis Excel
+            </button>
+          )}
+          {isCashier && (
+            <button 
+              onClick={() => setShowEpargnantForm(true)}
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100"
+            >
+              <UserPlus className="h-4 w-4" /> Nouveau client épargnant
+            </button>
+          )}
+          <span className="text-xs font-semibold text-slate-400 self-center ml-2">
+            {currentUser.role === 'commercial' ? 'Visibilité restreinte' : isAdmin ? 'Pilotage Administrateur' : 'Accès complet — caissier'}
+          </span>
+        </div>
       </div>
+
+      {showImportDialog && (
+        <ExcelImportDialog 
+          onClose={() => setShowImportDialog(false)} 
+          onImportSuccess={() => {
+            // Re-fetch clients to show new data
+            api.getClients().then(setClients).catch(console.error);
+          }}
+        />
+      )}
+
+      {showEpargnantForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl border border-slate-100">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-indigo-100 p-2 text-indigo-600">
+                  <UserPlus className="h-5 w-5" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900">Nouveau client épargnant seul</h3>
+              </div>
+              <button onClick={() => setShowEpargnantForm(false)} className="rounded-full p-2 text-slate-400 hover:bg-slate-100">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <form className="space-y-4" onSubmit={async (e) => {
+              e.preventDefault();
+              if (isEpargnantLoading) return;
+              setIsEpargnantLoading(true);
+              try {
+                const client = await api.createClient({
+                  name,
+                  type: 'simple',
+                  phone,
+                  address,
+                  assignedCommercialId: currentUser.id // Par défaut lui-même ou choix? Direct 20.2 dit "création automatique"
+                });
+                setClients(prev => [client, ...prev]);
+                setShowEpargnantForm(false);
+                setMsg({ text: `Client épargnant ${client.name} créé avec succès.`, type: 'success' });
+                // Reset fields
+                setName(''); setPhone(''); setAddress('');
+              } catch (err: any) {
+                alert(err.message || "Erreur lors de la création");
+              } finally {
+                setIsEpargnantLoading(false);
+              }
+            }}>
+              <label className="block space-y-1">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Nom et Prénoms *</span>
+                <input required value={name} onChange={e => setName(e.target.value)} type="text" className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50/50" placeholder="Ex: Jean Dupont" />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Téléphone *</span>
+                <input required value={phone} onChange={e => setPhone(e.target.value)} type="tel" className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50/50" placeholder="00229XXXXXXXX" />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Adresse</span>
+                <input value={address} onChange={e => setAddress(e.target.value)} type="text" className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50/50" placeholder="Cotonou, Bénin..." />
+              </label>
+
+              <div className="pt-4 flex gap-3">
+                <button type="button" onClick={() => setShowEpargnantForm(false)} className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50">
+                  Annuler
+                </button>
+                <button type="submit" disabled={isEpargnantLoading} className="flex-1 rounded-2xl bg-indigo-600 py-3 text-sm font-bold text-white hover:bg-indigo-700 shadow-lg shadow-indigo-100 flex items-center justify-center gap-2">
+                  {isEpargnantLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  Créer le compte
+                </button>
+              </div>
+              <p className="text-[10px] text-center text-slate-400 mt-2">
+                Aucun frais d’adhésion ni d'assurance ne sera prélevé pour ce profil.
+              </p>
+            </form>
+          </div>
+        </div>
+      )}
 
       {isLoadingClients && <div className="text-sm text-slate-500">Chargement des clients depuis le backend...</div>}
       {backendError && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{backendError}</div>}

@@ -46,8 +46,9 @@ export default function App() {
     switch (user.role) {
       case 'admin':
         if (activeTab === 'dashboard') return <AdminCockpit currentUser={user} />;
-        if (activeTab === 'users') return <AdminUsers currentUser={user} />;
-        if (activeTab === 'logs') return <ActionLogs />;
+        if (activeTab === 'clients')   return <ClientManagement currentUser={user} />;
+        if (activeTab === 'users')     return <AdminUsers currentUser={user} />;
+        if (activeTab === 'logs')      return <ActionLogs />;
         return <AdminCockpit currentUser={user} />;
 
       case 'caissier':

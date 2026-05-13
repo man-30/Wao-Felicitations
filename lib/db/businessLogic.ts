@@ -45,14 +45,32 @@ export async function createClientWithCodes(data: {
     })
   }
 
-  return prisma.client.create({
-    data: {
-      ...data,
-      membershipCode,
-      accountNumber,
-      savingsBalance: new Decimal(0),
-      financingBalance: new Decimal(0),
-    },
+  return prisma.$transaction(async (tx) => {
+    const client = await tx.client.create({
+      data: {
+        ...data,
+        membershipCode,
+        accountNumber,
+        savingsBalance: new Decimal(0),
+        financingBalance: new Decimal(0),
+      },
+    })
+
+    // Créer automatiquement le compte épargne
+    await tx.account.create({
+      data: {
+        clientId: client.id,
+        type: 'epargne',
+        accountNumber: `EP-${accountNumber}`,
+        label: `Compte épargne - ${data.name}`,
+        balance: new Decimal(0),
+        status: 'actif',
+        createdBy: data.assignedCommercialId, // Par défaut
+        createdByName: 'Système',
+      }
+    })
+
+    return client
   })
 }
 

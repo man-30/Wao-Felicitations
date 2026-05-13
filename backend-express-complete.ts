@@ -345,6 +345,90 @@ app.post('/api/clients', authenticateToken, requireRole('admin', 'commercial'), 
 })
 
 /**
+ * POST /api/clients/import-excel
+ * Importation massive de clients
+ */
+app.post('/api/clients/import-excel', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const { clients } = req.body
+    if (!Array.isArray(clients)) {
+      return res.status(400).json({ error: 'Invalid data format: expected an array of clients' })
+    }
+
+    const report = {
+      successCount: 0,
+      ignoredCount: 0,
+      errorCount: 0,
+      errors: [] as any[],
+    }
+
+    for (const data of clients) {
+      try {
+        // 1. Unicité du N° de compte (fourni par l'Excel)
+        const existing = await prisma.client.findUnique({
+          where: { accountNumber: data.accountNumber }
+        })
+
+        if (existing) {
+          report.ignoredCount++
+          continue
+        }
+
+        // 2. Recherche du commercial par nom
+        let commercialId = req.user!.userId
+        if (data.commercialName) {
+          const comm = await prisma.user.findFirst({
+            where: { 
+              name: { contains: data.commercialName, mode: 'insensitive' },
+              role: 'commercial'
+            }
+          })
+          if (comm) commercialId = comm.id
+        }
+
+        // 3. Création du client
+        const newClient = await prisma.client.create({
+          data: {
+            name: data.name,
+            type: data.type || 'simple',
+            phone: data.phone,
+            address: data.address || '',
+            accountNumber: data.accountNumber,
+            membershipCode: generateMembershipCode(),
+            assignedCommercialId: commercialId,
+            savingsBalance: new Decimal(data.initialBalance || 0),
+            financingBalance: new Decimal(0),
+          }
+        })
+
+        // 4. Création automatique du compte épargne
+        await prisma.account.create({
+          data: {
+            clientId: newClient.id,
+            type: 'epargne',
+            accountNumber: `EP-${newClient.accountNumber}`,
+            label: `Compte épargne - ${newClient.name}`,
+            balance: new Decimal(data.initialBalance || 0),
+            status: 'actif',
+            createdBy: req.user!.userId,
+            createdByName: req.user!.email,
+          }
+        })
+
+        report.successCount++
+      } catch (err: any) {
+        report.errorCount++
+        report.errors.push({ rowName: data.name, message: err.message })
+      }
+    }
+
+    res.json(report)
+  } catch (error: any) {
+    res.status(500).json({ error: 'Import failed', message: error.message })
+  }
+})
+
+/**
  * GET /api/clients/:clientId
  * Récupère les détails d'un client
  */

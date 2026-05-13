@@ -35,6 +35,7 @@ export default function Sidebar({ currentUser, activeTab, setActiveTab, onLogout
       case 'admin':
         return [
           { id: 'dashboard', label: 'Cockpit', icon: LayoutDashboard },
+          { id: 'clients', label: 'Clients', icon: Users },
           { id: 'users', label: 'Utilisateurs', icon: Users },
           { id: 'logs', label: 'Audit', icon: ShieldCheck },
         ];
