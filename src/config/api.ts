@@ -13,7 +13,7 @@ export const api = {
   baseURL: API_URL,
   
   async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const token = localStorage.getItem('auth_token');
+    const token = sessionStorage.getItem('auth_token');
     
     const headers: HeadersInit = {
       'Content-Type': 'application/json',

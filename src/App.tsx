@@ -22,7 +22,7 @@ import InsuranceFundManagement from './components/InsuranceFundManagement';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(() => {
-    const stored = localStorage.getItem('current_user');
+    const stored = sessionStorage.getItem('current_user');
     if (!stored) return null;
     try {
       return JSON.parse(stored) as User;
@@ -37,8 +37,8 @@ export default function App() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('current_user');
+    sessionStorage.removeItem('auth_token');
+    sessionStorage.removeItem('current_user');
     setUser(null);
   };
 

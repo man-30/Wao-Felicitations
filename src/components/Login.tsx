@@ -25,8 +25,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       if (useBackend) {
         // API Backend authentication
         const response = await api.login(email, password);
-        localStorage.setItem('auth_token', response.token);
-        localStorage.setItem('current_user', JSON.stringify(response.user));
+        sessionStorage.setItem('auth_token', response.token);
+        sessionStorage.setItem('current_user', JSON.stringify(response.user));
         confetti({
           particleCount: 100,
           spread: 70,

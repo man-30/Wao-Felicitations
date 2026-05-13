@@ -28,6 +28,7 @@ export default function ExcelImportDialog({ onClose, onImportSuccess }: ExcelImp
   const [data, setData] = useState<ValidationResult[]>([]);
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [report, setReport] = useState<any>(null);
   const [showRawData, setShowRawData] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
