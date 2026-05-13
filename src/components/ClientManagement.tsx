@@ -5,7 +5,8 @@ import api from '../config/api';
 import { calculerGrille, calculerGrilleNonApprenant } from '../grille';
 import {
   UserPlus, Search, GraduationCap, UserCheck, Briefcase,
-  History, ArrowRightLeft, X, Pencil, Eye, Lock, PiggyBank, HandCoins, ArrowRight, Printer, FileSpreadsheet
+  History, ArrowRightLeft, X, Pencil, Eye, Lock, PiggyBank, HandCoins, ArrowRight, Printer, FileSpreadsheet,
+  Loader2, CheckCircle2, AlertTriangle
 } from 'lucide-react';
 import { requestAdminCode, validateAndConsumeAdminCode } from '../adminCodes';
 import ExcelImportDialog from './ExcelImportDialog';
@@ -20,22 +21,26 @@ export default function ClientManagement({ currentUser }: Props) {
   const commercials = db.getUsers().filter(u => u.role === 'commercial');
 
   useEffect(() => {
-    const fetchClients = async () => {
+    const fetchData = async () => {
       setIsLoadingClients(true);
       setBackendError('');
 
       try {
-        const apiClients = await api.getClients();
+        const [apiClients, apiUsers] = await Promise.all([
+          api.getClients(),
+          api.getUsers()
+        ]);
         setClients(apiClients);
         db.saveClients(apiClients);
+        db.saveUsers(apiUsers);
       } catch (err: any) {
-        setBackendError(err.message || 'Impossible de charger la liste des clients depuis le backend.');
+        setBackendError(err.message || 'Impossible de charger les données depuis le backend.');
       } finally {
         setIsLoadingClients(false);
       }
     };
 
-    fetchClients();
+    fetchData();
   }, []);
 
   // Create
@@ -511,20 +516,29 @@ export default function ClientManagement({ currentUser }: Props) {
 
       {showEpargnantForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl border border-slate-100">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="rounded-xl bg-indigo-100 p-2 text-indigo-600">
-                  <UserPlus className="h-5 w-5" />
+          <div className="w-full max-w-xl rounded-[2.5rem] bg-white p-8 shadow-2xl border border-slate-100 relative overflow-hidden">
+            {/* Background Accent */}
+            <div className="absolute top-0 right-0 -mr-16 -mt-16 h-32 w-32 rounded-full bg-indigo-50 opacity-50" />
+            
+            <div className="flex items-center justify-between mb-8 relative">
+              <div className="flex items-center gap-4">
+                <div className="rounded-2xl bg-indigo-600 p-3 text-white shadow-lg shadow-indigo-200">
+                  <PiggyBank className="h-6 w-6" />
                 </div>
-                <h3 className="text-lg font-bold text-slate-900">Nouveau client épargnant seul</h3>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 tracking-tight">Inscription Épargnant</h3>
+                  <p className="text-sm text-slate-500 font-medium">Ouverture de compte tontine & épargne</p>
+                </div>
               </div>
-              <button onClick={() => setShowEpargnantForm(false)} className="rounded-full p-2 text-slate-400 hover:bg-slate-100">
-                <X className="h-5 w-5" />
+              <button 
+                onClick={() => setShowEpargnantForm(false)} 
+                className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+              >
+                <X className="h-6 w-6" />
               </button>
             </div>
             
-            <form className="space-y-4" onSubmit={async (e) => {
+            <form className="space-y-5 relative" onSubmit={async (e) => {
               e.preventDefault();
               if (isEpargnantLoading) return;
               setIsEpargnantLoading(true);
@@ -534,52 +548,139 @@ export default function ClientManagement({ currentUser }: Props) {
                   type: 'simple',
                   phone,
                   address,
-                  assignedCommercialId: currentUser.id // Par défaut lui-même ou choix? Direct 20.2 dit "création automatique"
+                  assignedCommercialId: assignedCommercialId || currentUser.id
                 });
                 setClients(prev => [client, ...prev]);
                 setShowEpargnantForm(false);
                 setMsg({ text: `Client épargnant ${client.name} créé avec succès.`, type: 'success' });
                 // Reset fields
-                setName(''); setPhone(''); setAddress('');
+                setName(''); setPhone(''); setAddress(''); setAssignedCommercialId('');
               } catch (err: any) {
                 alert(err.message || "Erreur lors de la création");
               } finally {
                 setIsEpargnantLoading(false);
               }
             }}>
-              <label className="block space-y-1">
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Nom et Prénoms *</span>
-                <input required value={name} onChange={e => setName(e.target.value)} type="text" className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50/50" placeholder="Ex: Jean Dupont" />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Téléphone *</span>
-                <input required value={phone} onChange={e => setPhone(e.target.value)} type="tel" className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50/50" placeholder="00229XXXXXXXX" />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Adresse</span>
-                <input value={address} onChange={e => setAddress(e.target.value)} type="text" className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50/50" placeholder="Cotonou, Bénin..." />
-              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <label className="block space-y-1.5 md:col-span-2">
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">Nom et Prénoms Complet *</span>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <UserCheck className="h-4 w-4 text-slate-400" />
+                    </div>
+                    <input 
+                      required 
+                      value={name} 
+                      onChange={e => setName(e.target.value)} 
+                      type="text" 
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50/50 pl-11 pr-4 py-3.5 outline-none focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-medium" 
+                      placeholder="Ex: Idrissa Ouédraogo" 
+                    />
+                  </div>
+                </label>
 
-              <div className="pt-4 flex gap-3">
-                <button type="button" onClick={() => setShowEpargnantForm(false)} className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50">
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">Téléphone *</span>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <History className="h-4 w-4 text-slate-400" />
+                    </div>
+                    <input 
+                      required 
+                      value={phone} 
+                      onChange={e => setPhone(e.target.value)} 
+                      type="tel" 
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50/50 pl-11 pr-4 py-3.5 outline-none focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-medium" 
+                      placeholder="00229..." 
+                    />
+                  </div>
+                </label>
+
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">Commercial Affecté</span>
+                  <select 
+                    value={assignedCommercialId} 
+                    onChange={e => setAssignedCommercialId(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50/50 px-4 py-3.5 outline-none focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-medium appearance-none"
+                  >
+                    <option value="">— Mon propre compte —</option>
+                    {commercials.map(c => (
+                      <option key={c.id} value={c.id}>{c.name} ({c.zone || 'Global'})</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block space-y-1.5 md:col-span-2">
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">Adresse de résidence</span>
+                  <input 
+                    value={address} 
+                    onChange={e => setAddress(e.target.value)} 
+                    type="text" 
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50/50 px-4 py-3.5 outline-none focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm font-medium" 
+                    placeholder="Quartier, Ville, Points de repère..." 
+                  />
+                </label>
+              </div>
+
+              <div className="pt-6 flex gap-4">
+                <button 
+                  type="button" 
+                  onClick={() => setShowEpargnantForm(false)} 
+                  className="flex-1 rounded-2xl border border-slate-200 py-4 text-sm font-bold text-slate-600 hover:bg-slate-50 active:scale-95 transition-all"
+                >
                   Annuler
                 </button>
-                <button type="submit" disabled={isEpargnantLoading} className="flex-1 rounded-2xl bg-indigo-600 py-3 text-sm font-bold text-white hover:bg-indigo-700 shadow-lg shadow-indigo-100 flex items-center justify-center gap-2">
-                  {isEpargnantLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                  Créer le compte
+                <button 
+                  type="submit" 
+                  disabled={isEpargnantLoading} 
+                  className="flex-[1.5] rounded-2xl bg-indigo-600 py-4 text-sm font-bold text-white hover:bg-indigo-700 shadow-xl shadow-indigo-200 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isEpargnantLoading ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="h-5 w-5" />
+                  )}
+                  {isEpargnantLoading ? 'Validation en cours...' : 'Générer la Fiche Client'}
                 </button>
               </div>
-              <p className="text-[10px] text-center text-slate-400 mt-2">
-                Aucun frais d’adhésion ni d'assurance ne sera prélevé pour ce profil.
-              </p>
+              
+              <div className="rounded-2xl bg-teal-50/50 border border-teal-100 p-4 flex items-start gap-3">
+                <HandCoins className="h-5 w-5 text-teal-600 shrink-0" />
+                <p className="text-[11px] leading-relaxed text-teal-800 font-medium">
+                  <strong>Avantages Épargnant :</strong> Aucun frais d’adhésion, de dossier ou d'assurance. 
+                  L'apport initial de tontine sera comptabilisé dès la première transaction.
+                </p>
+              </div>
             </form>
           </div>
         </div>
       )}
 
-      {isLoadingClients && <div className="text-sm text-slate-500">Chargement des clients depuis le backend...</div>}
-      {backendError && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{backendError}</div>}
-      {msg.text && <div className={`p-3 text-sm rounded-xl border ${msg.type === 'error' ? 'bg-red-50 text-red-600 border-red-200' : 'bg-green-50 text-green-600 border-green-200'}`}>{msg.text}</div>}
+      {isLoadingClients && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 text-sm animate-pulse font-medium">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Synchronisation avec le serveur Neon en cours...
+        </div>
+      )}
+      {backendError && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 flex items-center gap-3 shadow-sm">
+          <div className="rounded-full bg-amber-100 p-2 text-amber-600">
+            <AlertTriangle className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-amber-900">Information de connexion</p>
+            <p className="text-xs text-amber-800 opacity-80">{backendError}</p>
+          </div>
+        </div>
+      )}
+      {msg.text && (
+        <div className={`p-4 text-sm rounded-2xl border shadow-sm animate-in fade-in slide-in-from-top-2 ${msg.type === 'error' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+          <div className="flex items-center gap-2">
+            {msg.type === 'error' ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+            <span className="font-bold">{msg.type === 'error' ? 'Erreur : ' : 'Succès : '}</span> {msg.text}
+          </div>
+        </div>
+      )}
 
       {/* Creation Form — 19.1: Supprimé du mode lecture seule caissier. Accès réservé à l'admin. */}
       {false && isCashier && (

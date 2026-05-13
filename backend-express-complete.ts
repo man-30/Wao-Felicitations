@@ -454,6 +454,51 @@ app.get('/api/clients/:clientId', authenticateToken, async (req: Request, res: R
   }
 })
 
+/**
+ * GET /api/clients
+ * Récupère la liste de tous les clients
+ */
+app.get('/api/clients', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const clients = await prisma.client.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        accounts: true,
+      }
+    })
+    res.json(clients)
+  } catch (error) {
+    console.error('Fetch clients error:', error)
+    res.status(500).json({ error: 'Failed to fetch clients' })
+  }
+})
+
+/**
+ * GET /api/users
+ * Récupère la liste de tous les utilisateurs (pour sélection commercial etc.)
+ */
+app.get('/api/users', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        zone: true,
+        isActive: true,
+        createdAt: true,
+      },
+      orderBy: { name: 'asc' }
+    })
+    res.json(users)
+  } catch (error) {
+    console.error('Fetch users error:', error)
+    res.status(500).json({ error: 'Failed to fetch users' })
+  }
+})
+
 // ───────────────────────────────────────────────────────────────────────────
 // TRANSACTION ROUTES
 // ───────────────────────────────────────────────────────────────────────────

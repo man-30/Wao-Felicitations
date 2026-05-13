@@ -31,6 +31,15 @@ export default function ExcelImportDialog({ onClose, onImportSuccess }: ExcelImp
   const [report, setReport] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const findKey = (row: any, ...aliases: string[]) => {
+    const keys = Object.keys(row);
+    for (const alias of aliases) {
+      const found = keys.find(k => k.trim().toLowerCase() === alias.toLowerCase());
+      if (found) return row[found];
+    }
+    return undefined;
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -39,21 +48,21 @@ export default function ExcelImportDialog({ onClose, onImportSuccess }: ExcelImp
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
+        const data = evt.target?.result;
+        const wb = XLSX.read(data, { type: 'array' });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
         const rawData = XLSX.utils.sheet_to_json(ws) as any[];
 
         const mappedData: ValidationResult[] = rawData.map((row: any) => {
           const importRow: ImportRow = {
-            name: row['Nom Complet'] || row['Nom'] || '',
-            type: row['Type'] || 'simple',
-            phone: String(row['Téléphone'] || ''),
-            address: row['Adresse'] || '',
-            accountNumber: row['N° De Compte'] || '',
-            commercialName: row['Commercial'] || '',
-            initialBalance: Number(row['Solde Initial'] || 0),
+            name: findKey(row, 'Nom Complet', 'Nom', 'Full Name') || '',
+            type: findKey(row, 'Type', 'Client Type') || 'simple',
+            phone: String(findKey(row, 'Téléphone', 'Tél', 'Phone', 'Tel') || ''),
+            address: findKey(row, 'Adresse', 'Address') || '',
+            accountNumber: findKey(row, 'N° De Compte', 'Compte', 'Account Number', 'Account') || '',
+            commercialName: findKey(row, 'Commercial', 'Agent') || '',
+            initialBalance: Number(findKey(row, 'Solde Initial', 'Solde', 'Initial Balance', 'Balance') || 0),
           };
 
           let status: 'valid' | 'invalid' | 'warning' = 'valid';
@@ -75,7 +84,7 @@ export default function ExcelImportDialog({ onClose, onImportSuccess }: ExcelImp
         setIsParsing(false);
       }
     };
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
   };
 
   const startImport = async () => {
