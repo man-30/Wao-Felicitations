@@ -17,8 +17,13 @@ import { dirname, join } from 'path'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
-// Charger .env.staging explicitement pour staging
-config({ path: join(__dirname, '.env.staging') })
+// Charger l'env approprié
+const envPath = process.env.NODE_ENV === 'production' 
+  ? '.env.production' 
+  : (process.env.NODE_ENV === 'staging' ? '.env.staging' : '.env')
+
+config({ path: join(__dirname, envPath) })
+console.log(`◇ injected env from ${envPath}`)
 
 import { PrismaClient } from '@prisma/client'
 import Decimal from 'decimal.js'
@@ -780,14 +785,14 @@ app.use(errorHandler)
 // SERVER STARTUP
 // ───────────────────────────────────────────────────────────────────────────
 
-app.listen(PORT, () => {
+app.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`
 ╔══════════════════════════════════════════════════════════╗
 ║   Wao Félicitations - API Server                        ║
 ║   PHASE 6, 7, 8 - Sécurité, Logique Métier, Logs       ║
 ╚══════════════════════════════════════════════════════════╝
 
-Server running on http://localhost:${PORT}
+Server running on http://0.0.0.0:${PORT}
 
 ✅ Authentification JWT
 ✅ RBAC (Role-Based Access Control)
