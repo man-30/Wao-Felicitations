@@ -30,12 +30,19 @@ export default function ExcelImportDialog({ onClose, onImportSuccess }: ExcelImp
   const [isImporting, setIsImporting] = useState(false);
   const [report, setReport] = useState<any>(null);
   const [showRawData, setShowRawData] = useState(false);
+  const [detectedKeys, setDetectedKeys] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const findKey = (row: any, ...aliases: string[]) => {
     const keys = Object.keys(row);
+    // 1. Try exact match (normalized)
     for (const alias of aliases) {
       const found = keys.find(k => k.trim().toLowerCase() === alias.toLowerCase());
+      if (found) return row[found];
+    }
+    // 2. Try fuzzy match (includes)
+    for (const alias of aliases) {
+      const found = keys.find(k => k.toLowerCase().includes(alias.toLowerCase()));
       if (found) return row[found];
     }
     return undefined;
@@ -79,16 +86,17 @@ export default function ExcelImportDialog({ onClose, onImportSuccess }: ExcelImp
 
         // Parse with identified header row
         const jsonData = XLSX.utils.sheet_to_json(ws, { range: headerRowIndex }) as any[];
+        setDetectedKeys(jsonData.length > 0 ? Object.keys(jsonData[0]) : []);
 
         const mappedData: ValidationResult[] = jsonData.map((row: any) => {
           const importRow: ImportRow = {
-            name: findKey(row, 'Nom Complet', 'Nom', 'Full Name', 'Nom et Prénoms') || '',
+            name: findKey(row, 'Nom Complet', 'Nom', 'Full Name', 'Nom et Prénoms', 'Prenoms', 'Prénoms') || '',
             type: findKey(row, 'Type', 'Client Type') || 'simple',
-            phone: String(findKey(row, 'Téléphone', 'Tél', 'Phone', 'Tel', 'Contact') || ''),
-            address: findKey(row, 'Adresse', 'Address', 'Résidence') || '',
-            accountNumber: findKey(row, 'N° De Compte', 'Compte', 'N° Compte', 'Account Number', 'Account', 'Code') || '',
-            commercialName: findKey(row, 'Commercial', 'Agent', 'Promoteur', 'Vendeur') || '',
-            initialBalance: Number(findKey(row, 'Solde Initial', 'Solde', 'Initial Balance', 'Balance', 'Montant') || 0),
+            phone: String(findKey(row, 'Téléphone', 'Tél', 'Phone', 'Tel', 'Contact', 'Numéro', 'Mobile') || ''),
+            address: findKey(row, 'Adresse', 'Address', 'Résidence', 'Ville', 'Quartier') || '',
+            accountNumber: findKey(row, 'N° De Compte', 'Compte', 'N° Compte', 'Account Number', 'Account', 'Code', 'ID') || '',
+            commercialName: findKey(row, 'Commercial', 'Agent', 'Promoteur', 'Vendeur', 'Gestionnaire') || '',
+            initialBalance: Number(findKey(row, 'Solde Initial', 'Solde', 'Initial Balance', 'Balance', 'Montant', 'Crédit') || 0),
           };
 
           let status: 'valid' | 'invalid' | 'warning' = 'valid';
@@ -260,8 +268,20 @@ export default function ExcelImportDialog({ onClose, onImportSuccess }: ExcelImp
               )}
 
               {showRawData && data.length > 0 && (
-                <div className="mb-4 max-h-48 overflow-auto rounded-xl bg-slate-900 p-4 text-[10px] text-slate-300 font-mono border border-slate-800">
-                  <pre>{JSON.stringify(data.map(d => d.row), null, 2)}</pre>
+                <div className="mb-4 space-y-4">
+                  <div className="rounded-xl bg-slate-900 p-4 border border-slate-800">
+                    <p className="text-xs font-bold text-indigo-400 mb-2 uppercase tracking-wider">Colonnes détectées dans votre fichier :</p>
+                    <div className="flex flex-wrap gap-2">
+                      {detectedKeys.map(k => (
+                        <span key={k} className="px-2 py-1 bg-slate-800 rounded text-slate-300 text-[10px] font-mono border border-slate-700">
+                          {k}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="max-h-48 overflow-auto rounded-xl bg-slate-900 p-4 text-[10px] text-slate-300 font-mono border border-slate-800">
+                    <pre>{JSON.stringify(data.map(d => d.row), null, 2)}</pre>
+                  </div>
                 </div>
               )}
 
