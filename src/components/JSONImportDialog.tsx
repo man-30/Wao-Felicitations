@@ -57,13 +57,13 @@ export default function JSONImportDialog({ onClose, onImportSuccess }: JSONImpor
 
     const mapped = jsonData.map((row: any) => {
       const importRow: ImportRow = {
-        name: String(findKey(row, 'Nom Complet', 'Nom', 'Full Name', 'Nom et Prénoms', 'Prenoms', 'Prénoms') || '').trim(),
-        type: findKey(row, 'Type', 'Client Type') || 'simple',
-        phone: String(findKey(row, 'Téléphone', 'Tél', 'Phone', 'Tel', 'Contact', 'Numéro', 'Mobile', 'CONTACT') || '').trim(),
-        address: String(findKey(row, 'Adresse', 'Address', 'Résidence', 'Ville', 'Quartier', 'ADRESSE') || '').trim(),
-        accountNumber: String(findKey(row, 'N° De Compte', 'Compte', 'N° Compte', 'Account Number', 'Account', 'Code', 'ID') || '').trim(),
-        commercialName: String(findKey(row, 'Commercial', 'Agent', 'Promoteur', 'Vendeur', 'Gestionnaire') || '').trim(),
-        initialBalance: Number(findKey(row, 'Solde Initial', 'Solde', 'Initial Balance', 'Balance', 'Montant', 'Crédit') || 0),
+        name: String(findKey(row, 'Nom Complet', 'Nom', 'Full Name', 'Nom et Prénoms', 'Prenoms', 'Prénoms', 'name', 'full_name', 'client', 'client_name') || '').trim(),
+        type: findKey(row, 'Type', 'Client Type', 'type') || 'simple',
+        phone: String(findKey(row, 'Téléphone', 'Tél', 'Phone', 'Tel', 'Contact', 'Numéro', 'Mobile', 'CONTACT', 'tel', 'phone_number', 'contact_no', 'mobile_no') || '').trim(),
+        address: String(findKey(row, 'Adresse', 'Address', 'Résidence', 'Ville', 'Quartier', 'ADRESSE', 'adresse', 'address', 'city') || '').trim(),
+        accountNumber: String(findKey(row, 'N° De Compte', 'Compte', 'N° Compte', 'Account Number', 'Account', 'Code', 'ID', 'account', 'acc_no', 'acc', 'compte_no', 'numero_compte') || '').trim(),
+        commercialName: String(findKey(row, 'Commercial', 'Agent', 'Promoteur', 'Vendeur', 'Gestionnaire', 'commercial', 'agent', 'agent_name', 'staff', 'user') || '').trim(),
+        initialBalance: Number(findKey(row, 'Solde Initial', 'Solde', 'Initial Balance', 'Balance', 'Montant', 'Crédit', 'solde_initial', 'montant_initial', 'amount', 'balance_initial') || 0),
       };
 
       let status: 'valid' | 'invalid' | 'warning' = 'valid';
@@ -94,9 +94,30 @@ export default function JSONImportDialog({ onClose, onImportSuccess }: JSONImpor
     reader.onload = (evt) => {
       try {
         const content = evt.target?.result as string;
-        const jsonData = JSON.parse(content);
-        const rows = Array.isArray(jsonData) ? jsonData : [jsonData];
+        let jsonData = JSON.parse(content);
+        
+        // Unwrap if it's an object with a single array property (e.g. { "clients": [...] })
+        if (jsonData && !Array.isArray(jsonData) && typeof jsonData === 'object') {
+          const keys = Object.keys(jsonData);
+          const arrayKey = keys.find(k => Array.isArray(jsonData[k]));
+          if (arrayKey) {
+            jsonData = jsonData[arrayKey];
+          } else {
+            // If it's a single object, wrap it
+            jsonData = [jsonData];
+          }
+        }
+
+        const rows = Array.isArray(jsonData) ? jsonData : [];
+        if (rows.length === 0) {
+          alert('Le fichier JSON ne contient aucun tableau de données détectable.');
+          return;
+        }
+
         const results = processRawData(rows);
+        if (results.length === 0) {
+          alert('Fichier lu avec succès, mais aucune donnée de client n\'a été identifiée. Vérifiez les noms des champs (Nom, Compte, etc.).');
+        }
         setData(results);
       } catch (err: any) {
         console.error('Error parsing JSON:', err);
