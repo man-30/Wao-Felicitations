@@ -77,6 +77,28 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next()
 })
 
+// Utility to recursively convert Decimal to Number for JSON serialization
+function serializePrisma(data: any): any {
+  if (data === null || data === undefined) return data
+  if (data instanceof Decimal) return data.toNumber()
+  if (Array.isArray(data)) return data.map(serializePrisma)
+  if (typeof data === 'object' && !(data instanceof Date)) {
+    const obj: any = {}
+    for (const key in data) {
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
+        // Hyphen normalization for frontend
+        if (key === 'type' && data[key] === 'non_apprenant') {
+          obj[key] = 'non-apprenant'
+        } else {
+          obj[key] = serializePrisma(data[key])
+        }
+      }
+    }
+    return obj
+  }
+  return data
+}
+
 // ───────────────────────────────────────────────────────────────────────────
 // ROOT ROUTE
 // ───────────────────────────────────────────────────────────────────────────
@@ -469,6 +491,7 @@ app.get('/api/clients/:clientId', authenticateToken, async (req: Request, res: R
         accounts: true,
         apprenant: true,
         nonApprenant: true,
+        schoolDebts: true,
         transactions: { take: 10, orderBy: { createdAt: 'desc' } },
       },
     })
@@ -493,6 +516,9 @@ app.get('/api/clients', authenticateToken, async (req: Request, res: Response) =
       orderBy: { createdAt: 'desc' },
       include: {
         accounts: true,
+        schoolDebts: true,
+        apprenant: true,
+        nonApprenant: true,
       }
     })
     res.json(clients)
@@ -970,6 +996,16 @@ Server running on http://0.0.0.0:${PORT}
 Protected routes require Authorization header:
 Authorization: Bearer <token>
   `)
+})
+
+
+// Intercept res.json to automatically serialize
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const originalJson = res.json
+  res.json = function (data) {
+    return originalJson.call(this, serializePrisma(data))
+  }
+  next()
 })
 
 export default app

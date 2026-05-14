@@ -103,8 +103,11 @@ export default function ClientManagement({ currentUser }: Props) {
   const isCashier = currentUser.role === 'caissier';
 
   const filteredClients = clients.filter(c => {
+    if (!c) return false;
     if (currentUser.role === 'commercial' && c.assignedCommercialId !== currentUser.id) return false;
-    return c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.phone.includes(searchTerm);
+    const name = c.name || '';
+    const phone = c.phone || '';
+    return name.toLowerCase().includes(searchTerm.toLowerCase()) || phone.includes(searchTerm);
   });
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -775,21 +778,25 @@ export default function ClientManagement({ currentUser }: Props) {
               {filteredClients.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">Aucun client trouvé.</td></tr>
               ) : filteredClients.map(c => {
-                const debt = c.schoolDebts.find(d => d.active);
+                const schoolDebts = c.schoolDebts || [];
+                const debt = schoolDebts.find(d => d.active);
+                const savingsBalance = Number(c.savingsBalance || 0);
+                const financingBalance = Number(c.financingBalance || 0);
+                
                 return (
                   <tr key={c.id} className="hover:bg-slate-50/60">
-                    <td className="px-4 py-3"><p className="font-semibold text-slate-900">{c.name}</p><p className="text-xs text-slate-400">Zone: {commName(c.assignedCommercialId)}</p></td>
+                    <td className="px-4 py-3"><p className="font-semibold text-slate-900">{c.name || 'Sans nom'}</p><p className="text-xs text-slate-400">Zone: {commName(c.assignedCommercialId)}</p></td>
                     <td className="px-4 py-3">{typeBadge(c.type)}</td>
-                    <td className="px-4 py-3 text-slate-500">{c.phone}</td>
-                    <td className="px-4 py-3 font-semibold text-emerald-600">{c.savingsBalance.toLocaleString()} F</td>
-                    <td className={`px-4 py-3 font-semibold ${(c.financingBalance || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(c.financingBalance || 0).toLocaleString()} F</td>
-                    <td className="px-4 py-3">{debt ? <><p className="font-medium text-slate-800">{debt.schoolName}</p><p className="text-xs text-indigo-600">Reste: {(debt.debtAmount - debt.paidAmount).toLocaleString()} F</p></> : <span className="text-slate-400 text-xs">—</span>}</td>
+                    <td className="px-4 py-3 text-slate-500">{c.phone || '—'}</td>
+                    <td className="px-4 py-3 font-semibold text-emerald-600">{savingsBalance.toLocaleString()} F</td>
+                    <td className={`px-4 py-3 font-semibold ${financingBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{financingBalance.toLocaleString()} F</td>
+                    <td className="px-4 py-3">{debt ? <><p className="font-medium text-slate-800">{debt.schoolName}</p><p className="text-xs text-indigo-600">Reste: {(Number(debt.debtAmount || 0) - Number(debt.paidAmount || 0)).toLocaleString()} F</p></> : <span className="text-slate-400 text-xs">—</span>}</td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1.5">
                         <button onClick={() => setViewClient(c)} title="Consulter" className="p-1.5 rounded-lg bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 border border-slate-200"><Eye className="w-3.5 h-3.5" /></button>
                         {isCashier && <button onClick={() => openEdit(c)} title="Modifier (code admin)" className="p-1.5 rounded-lg bg-slate-100 hover:bg-amber-50 text-slate-600 hover:text-amber-600 border border-slate-200"><Pencil className="w-3.5 h-3.5" /></button>}
                         {isCashier && c.type === 'apprenant' && <button onClick={() => setMigrateClient(c)} title="Changer établissement" className="p-1.5 rounded-lg bg-slate-100 hover:bg-purple-50 text-slate-600 hover:text-purple-600 border border-slate-200"><ArrowRightLeft className="w-3.5 h-3.5" /></button>}
-                        {c.schoolDebts.length > 0 && <button onClick={() => { const h = c.schoolDebts.map(d => `${d.schoolName}: ${d.paidAmount}/${d.debtAmount} F (${d.active ? 'Actif' : 'Ancien'})`).join('\n'); alert(`Historique Scolarité — ${c.name}\n\n${h}`); }} title="Historique dettes" className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200"><History className="w-3.5 h-3.5" /></button>}
+                        {schoolDebts.length > 0 && <button onClick={() => { const h = schoolDebts.map(d => `${d.schoolName}: ${d.paidAmount}/${d.debtAmount} F (${d.active ? 'Actif' : 'Ancien'})`).join('\n'); alert(`Historique Scolarité — ${c.name}\n\n${h}`); }} title="Historique dettes" className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200"><History className="w-3.5 h-3.5" /></button>}
                       </div>
                     </td>
                   </tr>
@@ -880,17 +887,17 @@ export default function ClientManagement({ currentUser }: Props) {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                   <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-3">
                     <p className="text-xs text-emerald-700 font-medium">Solde Épargne</p>
-                    <p className="mt-1 text-xl font-bold text-emerald-900">{viewClient.savingsBalance.toLocaleString()} F</p>
+                    <p className="mt-1 text-xl font-bold text-emerald-900">{Number(viewClient.savingsBalance || 0).toLocaleString()} F</p>
                     {savingsAcc && <p className="text-[10px] text-emerald-600 mt-0.5">{savingsAcc.accountNumber}</p>}
                   </div>
-                  <div className={`rounded-2xl border p-3 ${viewClient.financingBalance >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
-                    <p className={`text-xs font-medium ${viewClient.financingBalance >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                      {viewClient.financingBalance < 0 ? 'Dette financement' : 'Surplus financement'}
+                  <div className={`rounded-2xl border p-3 ${Number(viewClient.financingBalance || 0) >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+                    <p className={`text-xs font-medium ${Number(viewClient.financingBalance || 0) >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {Number(viewClient.financingBalance || 0) < 0 ? 'Dette financement' : 'Surplus financement'}
                     </p>
-                    <p className={`mt-1 text-xl font-bold ${viewClient.financingBalance >= 0 ? 'text-emerald-900' : 'text-rose-900'}`}>
-                      {viewClient.financingBalance.toLocaleString()} F
+                    <p className={`mt-1 text-xl font-bold ${Number(viewClient.financingBalance || 0) >= 0 ? 'text-emerald-900' : 'text-rose-900'}`}>
+                      {Number(viewClient.financingBalance || 0).toLocaleString()} F
                     </p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">{financeAccs.length} dossier(s) · {viewClient.financingBalance < 0 ? 'Remboursement en cours' : viewClient.financingBalance > 0 ? 'Transférable vers épargne' : 'Soldé'}</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">{financeAccs.length} dossier(s) · {Number(viewClient.financingBalance || 0) < 0 ? 'Remboursement en cours' : Number(viewClient.financingBalance || 0) > 0 ? 'Transférable vers épargne' : 'Soldé'}</p>
                   </div>
                   <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3">
                     <p className="text-xs text-slate-500 font-medium">Téléphone</p>
