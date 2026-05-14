@@ -91,7 +91,7 @@ export default function InsuranceFundCard({ variant = 'full' }: Props) {
             <p className="text-xs font-semibold uppercase">Tranches éligibles</p>
           </div>
           <p className="mt-2 text-xl font-bold text-slate-900">{Object.keys(stats.contributorsByGrille).length}</p>
-          <p className="text-[10px] text-slate-500">tranches grille N°6 à 13</p>
+          <p className="text-[10px] text-slate-500">toutes les tranches grille</p>
         </div>
       </div>
 
@@ -235,9 +235,7 @@ function DetailModal({ stats, apprenantName, onClose }: DetailProps) {
             </div>
           </div>
 
-          <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800">
-            <strong>Règle :</strong> les frais d'assurance ne sont collectés que pour les tranches scolarité supérieures à 70 000 F (grille N°6 à 13). Ce fonds sert de caisse commune de sécurité pour les apprenants.
-          </div>
+            <strong>Règle :</strong> les frais d'assurance sont collectés pour TOUTES les tranches de scolarité (grille N°1 à 13). Ce fonds sert de caisse commune de sécurité pour les apprenants.
         </div>
       </div>
     </div>
