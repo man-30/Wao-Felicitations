@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import api from '../config/api';
 import {
   Client, FinancementNonApprenant, NonApprenant,
   Transaction, User, DureeFinancement
@@ -16,7 +17,23 @@ const fmt = (v: number) => new Intl.NumberFormat('fr-FR').format(v) + ' F';
 const today = () => new Date().toISOString().split('T')[0];
 
 export default function NonApprenantFinancement({ currentUser }: Props) {
-  const commercials = db.getUsers().filter(u => u.role === 'commercial');
+  const [commercials, setCommercials] = useState<User[]>([]);
+  const [isLoadingComm, setIsLoadingComm] = useState(false);
+
+  useEffect(() => {
+    const fetchComm = async () => {
+      setIsLoadingComm(true);
+      try {
+        const u = await api.getUsers();
+        setCommercials(u.filter(user => user.role === 'commercial'));
+      } catch (err) {
+        console.error('Failed to fetch commercials', err);
+      } finally {
+        setIsLoadingComm(false);
+      }
+    };
+    fetchComm();
+  }, []);
   const [nonApprenants, setNonApprenants] = useState<NonApprenant[]>(db.getNonApprenants());
   const [search, setSearch] = useState('');
   const [showWizard, setShowWizard] = useState(false);
@@ -59,9 +76,12 @@ export default function NonApprenantFinancement({ currentUser }: Props) {
   const handleNext = () => {
     setError('');
     if (step === 1) {
+      // Nom, téléphone et commercial : plus obligatoires pour le moment (Directive utilisateur)
+      /*
       if (!fullName || !phone || !commercialId) {
         setError('Nom, téléphone et commercial obligatoires.'); return;
       }
+      */
     }
     if (step === 2) {
       if (!adhesionPaid || !carnetPaid || !pieceProvided || !photosProvided) {
@@ -90,10 +110,14 @@ export default function NonApprenantFinancement({ currentUser }: Props) {
 
     // 1. Create generic client
     const newClient: Client = {
-      id: clientId, name: fullName, type: 'non-apprenant', phone, address: '',
+      id: clientId, 
+      name: fullName || "Adhérent Sans Nom", 
+      type: 'non-apprenant', 
+      phone: phone || "0000", 
+      address: '',
       membershipCode: db.generateMembershipCode(),
       accountNumber: db.generateClientAccountNumber(),
-      assignedCommercialId: commercialId,
+      assignedCommercialId: commercialId || currentUser.id,
       savingsBalance: 0,
       financingBalance: calcul ? -calcul.totalARembourser : 0, // Dette = négatif
       schoolDebts: [],
@@ -297,12 +321,12 @@ export default function NonApprenantFinancement({ currentUser }: Props) {
                 <div className="space-y-4">
                   <h4 className="font-semibold text-slate-800">Identité du membre</h4>
                   <div className="grid gap-3">
-                    <label className="space-y-1"><span className="text-xs font-semibold text-slate-500">Nom complet *</span><input type="text" className="inp" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Ex: Koffi Kouame" /></label>
-                    <label className="space-y-1"><span className="text-xs font-semibold text-slate-500">Téléphone *</span><input type="text" className="inp" value={phone} onChange={e => setPhone(e.target.value)} /></label>
+                    <label className="block space-y-1"><span className="text-xs font-semibold text-slate-500">Nom complet</span><input type="text" className="inp" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Ex: Koffi Kouame" /></label>
+                    <label className="block space-y-1"><span className="text-xs font-semibold text-slate-500">Téléphone</span><input type="text" className="inp" value={phone} onChange={e => setPhone(e.target.value)} /></label>
                     <label className="space-y-1"><span className="text-xs font-semibold text-slate-500">N° Pièce d'identité</span><input type="text" className="inp" value={idNumber} onChange={e => setIdNumber(e.target.value)} /></label>
-                    <label className="space-y-1"><span className="text-xs font-semibold text-slate-500">Commercial assigné *</span>
-                      <select className="inp" value={commercialId} onChange={e => setCommercialId(e.target.value)}>
-                        <option value="">— Choisir —</option>
+                    <label className="block space-y-1"><span className="text-xs font-semibold text-slate-500">Commercial assigné</span>
+                      <select disabled={isLoadingComm} className="inp" value={commercialId} onChange={e => setCommercialId(e.target.value)}>
+                        <option value="">{isLoadingComm ? 'Chargement...' : '— Choisir —'}</option>
                         {commercials.map(c => <option key={c.id} value={c.id}>{c.name} ({c.zone || '—'})</option>)}
                       </select>
                     </label>
