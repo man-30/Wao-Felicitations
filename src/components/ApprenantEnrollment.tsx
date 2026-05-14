@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import api from '../config/api';
 import {
   Apprenant, ApprenantDocument, Caution, Client,
   DocumentStatus, Guardian, TontineAccount, Transaction, User,
@@ -26,7 +27,23 @@ const DOC_KEYS: { key: string; label: string }[] = [
 ];
 
 export default function ApprenantEnrollment({ currentUser }: Props) {
-  const commercials = db.getUsers().filter(u => u.role === 'commercial');
+  const [commercials, setCommercials] = useState<User[]>([]);
+  const [isLoadingComm, setIsLoadingComm] = useState(false);
+  
+  useEffect(() => {
+    const fetchComm = async () => {
+      setIsLoadingComm(true);
+      try {
+        const users = await api.getUsers();
+        setCommercials(users.filter(u => u.role === 'commercial'));
+      } catch (err) {
+        console.error('Failed to fetch commercials', err);
+      } finally {
+        setIsLoadingComm(false);
+      }
+    };
+    fetchComm();
+  }, []);
   const [apprenants, setApprenants] = useState<Apprenant[]>(db.getApprenants());
   const [tontineAccounts, setTontineAccounts] = useState<TontineAccount[]>(db.getTontineAccounts());
   const [search, setSearch] = useState('');
@@ -90,9 +107,12 @@ export default function ApprenantEnrollment({ currentUser }: Props) {
       }
     }
     if (step === 2) {
+      // Parent et caution : plus obligatoires pour le moment (Directive utilisateur)
+      /*
       if (!guardianName || !guardianPhone || !cautionName || !cautionPhone) {
         setError('Parent/tuteur et caution obligatoires.'); return;
       }
+      */
     }
     if (step === 4) {
       if (!calcul) { setError('Montant de frais de scolarité hors grille (max 175 000 F).'); return; }
@@ -411,8 +431,8 @@ export default function ApprenantEnrollment({ currentUser }: Props) {
                     <label className="space-y-1"><span className="text-xs font-semibold text-slate-500">Année scolaire</span><input type="text" className="inp" value={schoolYear} onChange={e => setSchoolYear(e.target.value)} placeholder="2025-2026" /></label>
                     <label className="space-y-1"><span className="text-xs font-semibold text-slate-500">Téléphone parent</span><input type="text" className="inp" value={parentPhone} onChange={e => setParentPhone(e.target.value)} placeholder="07 00 00 00 00" /></label>
                     <label className="md:col-span-2 space-y-1"><span className="text-xs font-semibold text-slate-500">Commercial assigné *</span>
-                      <select className="inp" value={commercialId} onChange={e => setCommercialId(e.target.value)}>
-                        <option value="">— Choisir le commercial —</option>
+                      <select disabled={isLoadingComm} className="inp" value={commercialId} onChange={e => setCommercialId(e.target.value)}>
+                        <option value="">{isLoadingComm ? 'Chargement...' : '— Choisir le commercial —'}</option>
                         {commercials.map(c => <option key={c.id} value={c.id}>{c.name} ({c.zone || 'Sans zone'})</option>)}
                       </select>
                     </label>

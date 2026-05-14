@@ -339,7 +339,7 @@ app.post('/api/auth/logout', authenticateToken, async (req: Request, res: Respon
  * Crée un client avec codes auto-générés
  * Rôles: admin, commercial
  */
-app.post('/api/clients', authenticateToken, requireRole('admin', 'commercial'), async (req: Request, res: Response) => {
+app.post('/api/clients', authenticateToken, requireRole('admin', 'commercial', 'caissier'), async (req: Request, res: Response) => {
   try {
     const { name, type, phone, address } = req.body
 
@@ -580,6 +580,52 @@ app.get('/api/users', authenticateToken, async (req: Request, res: Response) => 
   } catch (error) {
     console.error('Fetch users error:', error)
     res.status(500).json({ error: 'Failed to fetch users' })
+  }
+})
+
+/**
+ * POST /api/users
+ * Crée un nouvel utilisateur
+ * Rôles: admin seulement
+ */
+app.post('/api/users', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const { name, email, password, role, zone } = req.body
+
+    if (!name || !email || !password || !role) {
+      return res.status(400).json({ error: 'Champs obligatoires manquants : name, email, password, role' })
+    }
+
+    const existing = await prisma.user.findUnique({ where: { email } })
+    if (existing) {
+      return res.status(400).json({ error: 'Cet email est déjà utilisé' })
+    }
+
+    const hashedPassword = await hashPassword(password)
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        role: role as any,
+        zone: zone || null,
+        isActive: true
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        zone: true,
+        isActive: true,
+        createdAt: true
+      }
+    })
+
+    res.status(201).json(user)
+  } catch (error: any) {
+    console.error('Create user error:', error)
+    res.status(500).json({ error: error.message || 'Failed to create user' })
   }
 })
 

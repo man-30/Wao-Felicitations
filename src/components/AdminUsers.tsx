@@ -1,4 +1,5 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { useEffect, useState, FormEvent, useMemo } from 'react';
+import api from '../config/api';
 import { db } from '../localStorageDB';
 import { EmployeePayment, Transaction, User, UserRole } from '../types';
 import {
@@ -10,7 +11,23 @@ interface Props { currentUser: User; }
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR').format(Math.round(v)) + ' F';
 
 export default function AdminUsers({ currentUser }: Props) {
-  const [users, setUsers] = useState<User[]>(db.getUsers());
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  useEffect(() => {
+    const load = async () => {
+      setIsLoading(true);
+      try {
+        const u = await api.getUsers();
+        setUsers(u);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    load();
+  }, []);
   const [payments, setPayments] = useState<EmployeePayment[]>(db.getEmployeePayments());
   const [transactions] = useState<Transaction[]>(db.getTransactions());
   const [clients] = useState(db.getClients());
@@ -59,7 +76,7 @@ export default function AdminUsers({ currentUser }: Props) {
     return result;
   }, [users, clients, transactions]);
 
-  const handleCreate = (e: FormEvent) => {
+  const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
     if (!createName || !createEmail || !createPassword) {
       setFeedback('Nom, email et mot de passe obligatoires.'); return;
@@ -67,17 +84,26 @@ export default function AdminUsers({ currentUser }: Props) {
     if (users.some(u => u.email === createEmail)) {
       setFeedback('Cet email existe déjà.'); return;
     }
-    const newUser: User = {
-      id: 'u_' + Date.now(),
-      name: createName, email: createEmail, password: createPassword, role: createRole,
-      zone: createZone || undefined, isActive: true,
-      createdAt: new Date().toISOString().split('T')[0],
-    };
-    const updated = [...users, newUser];
-    db.saveUsers(updated); setUsers(updated);
-    db.addLog(currentUser.id, currentUser.name, currentUser.role, 'Création Employé', `${newUser.role} ${newUser.name} créé`);
-    setShowCreate(false); setCreateName(''); setCreateEmail(''); setCreatePassword(''); setCreateZone('');
-    setFeedback(`✓ Employé ${newUser.name} créé.`);
+    
+    try {
+      const newUser = await api.createUser({
+        name: createName,
+        email: createEmail,
+        password: createPassword,
+        role: createRole,
+        zone: createZone || undefined
+      });
+      
+      const updated = [...users, newUser];
+      setUsers(updated);
+      db.saveUsers(updated);
+      
+      db.addLog(currentUser.id, currentUser.name, currentUser.role, 'Création Employé', `${createRole} ${createName} créé`);
+      setShowCreate(false); setCreateName(''); setCreateEmail(''); setCreatePassword(''); setCreateZone('');
+      setFeedback(`✓ Employé ${createName} créé.`);
+    } catch (err: any) {
+      setFeedback('Erreur : ' + (err.message || 'Impossible de créer l\'utilisateur'));
+    }
   };
 
   const handleEdit = (e: FormEvent) => {

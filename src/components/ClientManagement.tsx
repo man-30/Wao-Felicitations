@@ -18,14 +18,18 @@ export default function ClientManagement({ currentUser }: Props) {
   const [accounts, setAccounts] = useState<Account[]>(db.getAccounts());
   const [backendError, setBackendError] = useState('');
   const [isLoadingClients, setIsLoadingClients] = useState(false);
-  const commercials = db.getUsers().filter(u => u.role === 'commercial');
+  const [commercials, setCommercials] = useState<User[]>([]);
 
   const fetchClients = async () => {
     setIsLoadingClients(true);
     try {
-      const apiClients = await api.getClients();
+      const [apiClients, apiUsers] = await Promise.all([
+        api.getClients(),
+        api.getUsers()
+      ]);
       setClients(apiClients);
       db.saveClients(apiClients);
+      setCommercials(apiUsers.filter(u => u.role === 'commercial'));
     } catch (err: any) {
       setBackendError(err.message || 'Impossible de charger les données.');
     } finally {
@@ -106,12 +110,17 @@ export default function ClientManagement({ currentUser }: Props) {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !phone || !assignedCommercialId) { setMsg({ text: 'Nom, téléphone et commercial obligatoires.', type: 'error' }); return; }
+    // Nom, téléphone et commercial : plus obligatoires pour le moment (Directive utilisateur)
+    // if (!name || !phone || !assignedCommercialId) { setMsg({ text: 'Nom, téléphone et commercial obligatoires.', type: 'error' }); return; }
+    
     if (type === 'apprenant') {
+      // Les infos parents sont optionnelles pour le moment (Directive utilisateur)
+      /*
       if (!parentName || !parentContact || !parentRelation || !cautionName || !cautionContact || !cautionProfession) {
         setMsg({ text: 'Pour un apprenant, les informations parent/tuteur et caution sont obligatoires.', type: 'error' });
         return;
       }
+      */
       if (!docCni && !docPassport && !docBirth && !docSchool && !docOther) {
         setMsg({ text: 'Veuillez cocher au moins une pièce fournie pour l’apprenant.', type: 'error' });
         return;
@@ -541,10 +550,10 @@ export default function ClientManagement({ currentUser }: Props) {
               setIsEpargnantLoading(true);
               try {
                 const client = await api.createClient({
-                  name,
+                  name: name || "Épargnant sans nom",
                   type: 'simple',
-                  phone,
-                  address,
+                  phone: phone || "0000",
+                  address: address || "",
                   assignedCommercialId: assignedCommercialId || currentUser.id
                 });
                 setClients(prev => [client, ...prev]);
@@ -566,7 +575,6 @@ export default function ClientManagement({ currentUser }: Props) {
                       <UserCheck className="h-4 w-4 text-slate-400" />
                     </div>
                     <input 
-                      required 
                       value={name} 
                       onChange={e => setName(e.target.value)} 
                       type="text" 
@@ -583,7 +591,6 @@ export default function ClientManagement({ currentUser }: Props) {
                       <History className="h-4 w-4 text-slate-400" />
                     </div>
                     <input 
-                      required 
                       value={phone} 
                       onChange={e => setPhone(e.target.value)} 
                       type="tel" 
