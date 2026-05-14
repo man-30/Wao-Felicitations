@@ -3,6 +3,7 @@ import { db } from '../localStorageDB';
 import { ActionLog, AdminCodeRequest, Client, EmployeePayment, Expense, Transaction, User, UserRole } from '../types';
 import { actionTypeLabel, generateAdminCode as generateSensitiveCode, refreshAdminCodeRequests } from '../adminCodes';
 import InsuranceFundCard from './InsuranceFundCard';
+import { api } from '../config/api';
 import {
   AlertTriangle,
   ArrowDownRight,
@@ -155,6 +156,7 @@ export default function AdminCockpit({ currentUser }: AdminCockpitProps) {
   const [feedback, setFeedback] = useState('');
   const [isWiping, setIsWiping] = useState(false);
   const [showWipeConfirm, setShowWipeConfirm] = useState(false);
+  const [wipeConfirmPhrase, setWipeConfirmPhrase] = useState('');
 
   const referenceDate = useMemo(() => {
     const allDates = [
@@ -517,6 +519,7 @@ export default function AdminCockpit({ currentUser }: AdminCockpitProps) {
       
       setFeedback('La base de données clients a été intégralement vidée.');
       setShowWipeConfirm(false);
+      setWipeConfirmPhrase('');
     } catch (err: any) {
       setFeedback(`Erreur lors de la remise à zéro: ${err.message}`);
     } finally {
@@ -1069,14 +1072,24 @@ export default function AdminCockpit({ currentUser }: AdminCockpitProps) {
                   Êtes-vous absolument sûr ? Cette action est **irréversible**. <br/>
                   Toutes les données clients et transactions seront effacées du serveur et de votre navigateur.
                 </p>
+                <div className="space-y-2 pt-2">
+                  <p className="text-xs font-bold text-rose-700 uppercase tracking-wider">Écrivez "j'approuve" pour confirmer :</p>
+                  <input 
+                    type="text" 
+                    value={wipeConfirmPhrase}
+                    onChange={(e) => setWipeConfirmPhrase(e.target.value.toLowerCase())}
+                    className="w-full rounded-xl border-2 border-slate-200 px-4 py-2 text-center font-bold outline-none focus:border-rose-500"
+                    placeholder="Ecrivez ici..."
+                  />
+                </div>
               </div>
-              <div className="flex flex-col gap-2 pt-4">
+              <div className="flex flex-col gap-2 pt-2">
                 <button 
                   onClick={handleWipeData}
-                  disabled={isWiping}
-                  className="w-full rounded-2xl bg-rose-600 py-3 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50"
+                  disabled={isWiping || wipeConfirmPhrase !== "j'approuve"}
+                  className="w-full rounded-2xl bg-rose-600 py-3 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                 >
-                  {isWiping ? 'Suppression en cours...' : 'Oui, supprimer toutes les données'}
+                  {isWiping ? 'Suppression en cours...' : 'Confirmer la suppression'}
                 </button>
                 <button 
                   onClick={() => setShowWipeConfirm(false)}
