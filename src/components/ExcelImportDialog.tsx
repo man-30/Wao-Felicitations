@@ -56,6 +56,8 @@ export default function ExcelImportDialog({ onClose, onImportSuccess }: ExcelImp
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
+        const buf = evt.target?.result;
+        const wb = XLSX.read(buf, { type: 'array' });
         let allMappedData: ValidationResult[] = [];
         let allDetectedKeys = new Set<string>();
 
