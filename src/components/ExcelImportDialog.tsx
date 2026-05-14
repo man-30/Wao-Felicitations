@@ -31,6 +31,7 @@ export default function ExcelImportDialog({ onClose, onImportSuccess }: ExcelImp
   const [report, setReport] = useState<any>(null);
   const [showRawData, setShowRawData] = useState(false);
   const [detectedKeys, setDetectedKeys] = useState<string[]>([]);
+  const [importProgress, setImportProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const findKey = (row: any, ...aliases: string[]) => {
@@ -144,19 +145,48 @@ export default function ExcelImportDialog({ onClose, onImportSuccess }: ExcelImp
     if (validRows.length === 0) return;
 
     setIsImporting(true);
+    setImportProgress(0);
+    
+    let totalSuccess = 0;
+    let totalIgnored = 0;
+    let totalError = 0;
+    
+    const CHUNK_SIZE = 50;
+    const totalChunks = Math.ceil(validRows.length / CHUNK_SIZE);
+
     try {
-      const response = await api.request<any>('/api/clients/import-excel', {
-        method: 'POST',
-        body: JSON.stringify({ clients: validRows }),
+      for (let i = 0; i < validRows.length; i += CHUNK_SIZE) {
+        const chunk = validRows.slice(i, i + CHUNK_SIZE);
+        const chunkIndex = Math.floor(i / CHUNK_SIZE) + 1;
+        
+        console.log(`Importing chunk ${chunkIndex}/${totalChunks}...`);
+        
+        const response = await api.request<any>('/api/clients/import-excel', {
+          method: 'POST',
+          body: JSON.stringify({ clients: chunk }),
+        });
+
+        totalSuccess += response.successCount || 0;
+        totalIgnored += response.ignoredCount || 0;
+        totalError += response.errorCount || 0;
+        
+        setImportProgress(Math.round((chunkIndex / totalChunks) * 100));
+      }
+
+      setReport({
+        successCount: totalSuccess,
+        ignoredCount: totalIgnored,
+        errorCount: totalError,
       });
-      setReport(response);
-      if (response.successCount > 0) {
+
+      if (totalSuccess > 0) {
         onImportSuccess();
       }
     } catch (err: any) {
       alert('Erreur lors de l\'import : ' + err.message);
     } finally {
       setIsImporting(false);
+      setImportProgress(0);
     }
   };
 
@@ -338,24 +368,38 @@ export default function ExcelImportDialog({ onClose, onImportSuccess }: ExcelImp
                 </table>
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex flex-col gap-3">
                 <button 
-                  disabled={isImporting || data.filter(d => d.status !== 'invalid').length === 0}
                   onClick={startImport}
-                  className="flex-1 py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  disabled={isImporting}
+                  className="w-full py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {isImporting ? (
                     <>
                       <Loader2 className="h-5 w-5 animate-spin" />
-                      Importation en cours...
+                      Importation en cours ({importProgress}%)...
                     </>
                   ) : (
                     <>
                       <CheckCircle2 className="h-5 w-5" />
-                      Confirmer l'importation ({data.filter(d => d.status !== 'invalid').length} valides)
+                      Lancer l'importation massive
                     </>
                   )}
                 </button>
+
+                {isImporting && (
+                  <div className="mt-4">
+                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-indigo-600 transition-all duration-300" 
+                        style={{ width: `${importProgress}%` }}
+                      />
+                    </div>
+                    <p className="text-center text-xs font-semibold text-slate-500 mt-2">
+                      N'interrompez pas le processus... {importProgress}% terminé
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
