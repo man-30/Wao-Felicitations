@@ -34,6 +34,7 @@ import {
   validateEmail,
   validatePhone,
   validateMembershipCodeFormat,
+  generateMembershipCode,
 } from './lib/security.ts'
 import { authenticateToken, requireRole, requirePermission, validateZoneAccess, errorHandler } from './lib/middleware/auth.ts'
 import {
@@ -412,16 +413,19 @@ app.post('/api/clients/import-excel', authenticateToken, requireRole('admin'), a
         }
 
         // 3. Création du client
+        const cleanBalance = String(data.initialBalance || '0').replace(/\s/g, '').replace(',', '.')
+        const initialBalance = new Decimal(isNaN(Number(cleanBalance)) ? 0 : cleanBalance)
+
         const newClient = await prisma.client.create({
           data: {
-            name: data.name,
+            name: String(data.name).trim(),
             type: data.type || 'simple',
-            phone: data.phone,
-            address: data.address || '',
-            accountNumber: data.accountNumber,
+            phone: String(data.phone || '').trim(),
+            address: String(data.address || '').trim(),
+            accountNumber: String(data.accountNumber).trim(),
             membershipCode: generateMembershipCode(),
             assignedCommercialId: commercialId,
-            savingsBalance: new Decimal(data.initialBalance || 0),
+            savingsBalance: initialBalance,
             financingBalance: new Decimal(0),
           }
         })
@@ -433,7 +437,7 @@ app.post('/api/clients/import-excel', authenticateToken, requireRole('admin'), a
             type: 'epargne',
             accountNumber: `EP-${newClient.accountNumber}`,
             label: `Compte épargne - ${newClient.name}`,
-            balance: new Decimal(data.initialBalance || 0),
+            balance: initialBalance,
             status: 'actif',
             createdBy: req.user!.userId,
             createdByName: req.user!.email,
