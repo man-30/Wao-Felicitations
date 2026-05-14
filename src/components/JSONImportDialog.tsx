@@ -33,6 +33,18 @@ export default function JSONImportDialog({ onClose, onImportSuccess }: JSONImpor
   const [importProgress, setImportProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const flattenObject = (obj: any, prefix = ''): any => {
+    return Object.keys(obj).reduce((acc: any, k: string) => {
+      const pre = prefix.length ? prefix + '_' : '';
+      if (typeof obj[k] === 'object' && obj[k] !== null && !Array.isArray(obj[k])) {
+        Object.assign(acc, flattenObject(obj[k], pre + k));
+      } else {
+        acc[pre + k] = obj[k];
+      }
+      return acc;
+    }, {});
+  };
+
   const findKey = (row: any, ...aliases: string[]) => {
     const keys = Object.keys(row);
     // 1. Try exact match (normalized)
@@ -56,14 +68,17 @@ export default function JSONImportDialog({ onClose, onImportSuccess }: JSONImpor
     }
 
     const mapped = jsonData.map((row: any) => {
+      // Flatten row to handle nested objects like row.financier.soldeCompte
+      const flatRow = flattenObject(row);
+      
       const importRow: ImportRow = {
-        name: String(findKey(row, 'Nom Complet', 'Nom', 'Full Name', 'Nom et Prénoms', 'Prenoms', 'Prénoms', 'name', 'full_name', 'client', 'client_name') || '').trim(),
-        type: findKey(row, 'Type', 'Client Type', 'type') || 'simple',
-        phone: String(findKey(row, 'Téléphone', 'Tél', 'Phone', 'Tel', 'Contact', 'Numéro', 'Mobile', 'CONTACT', 'tel', 'phone_number', 'contact_no', 'mobile_no') || '').trim(),
-        address: String(findKey(row, 'Adresse', 'Address', 'Résidence', 'Ville', 'Quartier', 'ADRESSE', 'adresse', 'address', 'city') || '').trim(),
-        accountNumber: String(findKey(row, 'N° De Compte', 'Compte', 'N° Compte', 'Account Number', 'Account', 'Code', 'ID', 'account', 'acc_no', 'acc', 'compte_no', 'numero_compte') || '').trim(),
-        commercialName: String(findKey(row, 'Commercial', 'Agent', 'Promoteur', 'Vendeur', 'Gestionnaire', 'commercial', 'agent', 'agent_name', 'staff', 'user') || '').trim(),
-        initialBalance: Number(findKey(row, 'Solde Initial', 'Solde', 'Initial Balance', 'Balance', 'Montant', 'Crédit', 'solde_initial', 'montant_initial', 'amount', 'balance_initial') || 0),
+        name: String(findKey(flatRow, 'Nom Complet', 'Nom', 'Full Name', 'Nom et Prénoms', 'Prenoms', 'Prénoms', 'name', 'full_name', 'client', 'client_name') || '').trim(),
+        type: findKey(flatRow, 'Type', 'Client Type', 'type') || 'simple',
+        phone: String(findKey(flatRow, 'Téléphone', 'Tél', 'Phone', 'Tel', 'Contact', 'Numéro', 'Mobile', 'CONTACT', 'tel', 'phone_number', 'contact_no', 'mobile_no', 'tuteur_contact', 'tuteur.contact') || '').trim(),
+        address: String(findKey(flatRow, 'Adresse', 'Address', 'Résidence', 'Ville', 'Quartier', 'ADRESSE', 'adresse', 'address', 'city', 'ville') || '').trim(),
+        accountNumber: String(findKey(flatRow, 'N° De Compte', 'Compte', 'N° Compte', 'Account Number', 'Account', 'Code', 'ID', 'account', 'acc_no', 'acc', 'compte_no', 'numero_compte', 'numeroCompteExcel') || '').trim(),
+        commercialName: String(findKey(flatRow, 'Commercial', 'Agent', 'Promoteur', 'Vendeur', 'Gestionnaire', 'commercial', 'agent', 'agent_name', 'staff', 'user') || '').trim(),
+        initialBalance: Number(findKey(flatRow, 'Solde Initial', 'Solde', 'Initial Balance', 'Balance', 'Montant', 'Crédit', 'solde_initial', 'montant_initial', 'amount', 'balance_initial', 'soldeCompte', 'financier_soldeCompte') || 0),
       };
 
       let status: 'valid' | 'invalid' | 'warning' = 'valid';
