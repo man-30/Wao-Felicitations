@@ -6,10 +6,10 @@ import { calculerGrille, calculerGrilleNonApprenant } from '../grille';
 import {
   UserPlus, Search, GraduationCap, UserCheck, Briefcase,
   History, ArrowRightLeft, X, Pencil, Eye, Lock, PiggyBank, HandCoins, ArrowRight, Printer, FileSpreadsheet,
-  Loader2, CheckCircle2, AlertTriangle
+  Loader2, CheckCircle2, AlertTriangle, Upload
 } from 'lucide-react';
 import { requestAdminCode, validateAndConsumeAdminCode } from '../adminCodes';
-import ExcelImportDialog from './ExcelImportDialog';
+import JSONImportDialog from './JSONImportDialog';
 
 interface Props { currentUser: User; }
 
@@ -20,27 +20,21 @@ export default function ClientManagement({ currentUser }: Props) {
   const [isLoadingClients, setIsLoadingClients] = useState(false);
   const commercials = db.getUsers().filter(u => u.role === 'commercial');
 
+  const fetchClients = async () => {
+    setIsLoadingClients(true);
+    try {
+      const apiClients = await api.getClients();
+      setClients(apiClients);
+      db.saveClients(apiClients);
+    } catch (err: any) {
+      setBackendError(err.message || 'Impossible de charger les données.');
+    } finally {
+      setIsLoadingClients(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      setIsLoadingClients(true);
-      setBackendError('');
-
-      try {
-        const [apiClients, apiUsers] = await Promise.all([
-          api.getClients(),
-          api.getUsers()
-        ]);
-        setClients(apiClients);
-        db.saveClients(apiClients);
-        db.saveUsers(apiUsers);
-      } catch (err: any) {
-        setBackendError(err.message || 'Impossible de charger les données depuis le backend.');
-      } finally {
-        setIsLoadingClients(false);
-      }
-    };
-
-    fetchData();
+    fetchClients();
   }, []);
 
   // Create
@@ -390,7 +384,7 @@ export default function ClientManagement({ currentUser }: Props) {
           montantFinance: (calc as any).montantFinance || financeAmount,
           dureeChoisie: financeDuration,
           fraisDossier: calc.dossierFee,
-          fraisPrestation: calc.prestationFee,
+          fraisPrestation: calc.fraisPrestation,
           cotisationJournaliere: calc.dailyContribution,
           totalARembourser: calc.totalDue,
           totalCotise: 0,
@@ -488,9 +482,9 @@ export default function ClientManagement({ currentUser }: Props) {
           {isAdmin && (
             <button 
               onClick={() => setShowImportDialog(true)}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 transition-all shadow-sm"
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-900 shadow-lg shadow-indigo-100 transition-all hover:scale-105 active:scale-95"
             >
-              <FileSpreadsheet className="h-4 w-4" /> Importer depuis Excel
+              <Upload className="h-4 w-4" /> Importation JSON
             </button>
           )}
           {isCashier && (
@@ -508,12 +502,12 @@ export default function ClientManagement({ currentUser }: Props) {
       </div>
 
       {showImportDialog && (
-        <ExcelImportDialog 
+        <JSONImportDialog 
           onClose={() => setShowImportDialog(false)} 
           onImportSuccess={() => {
-            // Re-fetch clients to show new data
-            api.getClients().then(setClients).catch(console.error);
-          }}
+            fetchClients();
+            setShowImportDialog(false);
+          }} 
         />
       )}
 
@@ -678,7 +672,7 @@ export default function ClientManagement({ currentUser }: Props) {
           </div>
           <div className="flex gap-2 pl-12">
             <button 
-              onClick={() => fetchData()}
+              onClick={() => fetchClients()}
               className="text-xs px-3 py-1.5 bg-amber-200 text-amber-900 rounded-lg hover:bg-amber-300 transition-colors font-bold"
             >
               Réessayer la connexion
@@ -698,60 +692,6 @@ export default function ClientManagement({ currentUser }: Props) {
             {msg.type === 'error' ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
             <span className="font-bold">{msg.type === 'error' ? 'Erreur : ' : 'Succès : '}</span> {msg.text}
           </div>
-        </div>
-      )}
-
-      {/* Creation Form — 19.1: Supprimé du mode lecture seule caissier. Accès réservé à l'admin. */}
-      {false && isCashier && (
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-2 mb-4"><UserPlus className="w-5 h-5 text-indigo-600" /><h3 className="text-base font-semibold text-slate-800">Enregistrer un nouveau client</h3></div>
-          <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <label className="space-y-1"><span className="text-xs font-semibold text-slate-500">Nom Complet *</span><input type="text" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500" value={name} onChange={(e) => setName(e.target.value)} placeholder="Idriss Traoré" /></label>
-            <label className="space-y-1"><span className="text-xs font-semibold text-slate-500">Téléphone *</span><input type="text" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0708091011" /></label>
-            <label className="space-y-1"><span className="text-xs font-semibold text-slate-500">Type de client *</span>
-              <select className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500" value={type} onChange={(e) => setType(e.target.value as ClientType)}>
-                <option value="simple">Épargnant Simple</option><option value="apprenant">Apprenant (Élève)</option><option value="non-apprenant">Non-Apprenant</option>
-              </select>
-            </label>
-            <label className="md:col-span-2 space-y-1"><span className="text-xs font-semibold text-slate-500">Adresse</span><input type="text" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Abidjan, Angré" /></label>
-            <label className="space-y-1"><span className="text-xs font-semibold text-slate-500">Commercial *</span>
-              <select className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500" value={assignedCommercialId} onChange={(e) => setAssignedCommercialId(e.target.value)}>
-                <option value="">— Choisir —</option>{commercials.map(c => <option key={c.id} value={c.id}>{c.name} ({c.zone || '—'})</option>)}
-              </select>
-            </label>
-            {type === 'apprenant' && <>
-              <label className="space-y-1"><span className="text-xs font-semibold text-slate-500">Établissement *</span><input type="text" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500" value={schoolName} onChange={(e) => setSchoolName(e.target.value)} placeholder="Lycée Municipal" /></label>
-              <label className="space-y-1"><span className="text-xs font-semibold text-slate-500">Scolarité (dette) *</span><input type="number" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500" value={initialDebt || ''} onChange={(e) => setInitialDebt(Number(e.target.value))} placeholder="50000" /></label>
-              <div className="md:col-span-3 rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
-                <h4 className="text-sm font-bold text-indigo-900 mb-3">Informations Parent / Tuteur</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <label className="space-y-1"><span className="text-xs font-semibold text-slate-500">Nom et Prénoms *</span><input type="text" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500" value={parentName} onChange={(e) => setParentName(e.target.value)} /></label>
-                  <label className="space-y-1"><span className="text-xs font-semibold text-slate-500">Contact *</span><input type="text" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500" value={parentContact} onChange={(e) => setParentContact(e.target.value)} /></label>
-                  <label className="space-y-1"><span className="text-xs font-semibold text-slate-500">Lien de parenté *</span><select className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500" value={parentRelation} onChange={(e) => setParentRelation(e.target.value)}><option>Père</option><option>Mère</option><option>Tuteur</option><option>Tutrice</option><option>Autre</option></select></label>
-                </div>
-              </div>
-              <div className="md:col-span-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                <h4 className="text-sm font-bold text-amber-900 mb-3">Informations Caution</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <label className="space-y-1"><span className="text-xs font-semibold text-slate-500">Nom et Prénoms *</span><input type="text" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-amber-500" value={cautionName} onChange={(e) => setCautionName(e.target.value)} /></label>
-                  <label className="space-y-1"><span className="text-xs font-semibold text-slate-500">Contact *</span><input type="text" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-amber-500" value={cautionContact} onChange={(e) => setCautionContact(e.target.value)} /></label>
-                  <label className="space-y-1"><span className="text-xs font-semibold text-slate-500">Fonction / Profession *</span><input type="text" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-amber-500" value={cautionProfession} onChange={(e) => setCautionProfession(e.target.value)} /></label>
-                </div>
-              </div>
-              <div className="md:col-span-3 rounded-2xl border border-slate-200 bg-white p-4">
-                <h4 className="text-sm font-bold text-slate-900 mb-3">Pièces d'identité fournies</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 text-sm">
-                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 p-2"><input type="checkbox" checked={docCni} onChange={e => setDocCni(e.target.checked)} /> CNI</label>
-                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 p-2"><input type="checkbox" checked={docPassport} onChange={e => setDocPassport(e.target.checked)} /> Passeport</label>
-                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 p-2"><input type="checkbox" checked={docBirth} onChange={e => setDocBirth(e.target.checked)} /> Acte naissance</label>
-                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 p-2"><input type="checkbox" checked={docSchool} onChange={e => setDocSchool(e.target.checked)} /> Certificat scolarité</label>
-                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 p-2"><input type="checkbox" checked={docOther} onChange={e => setDocOther(e.target.checked)} /> Autre</label>
-                </div>
-                {docOther && <input type="text" value={docOtherText} onChange={e => setDocOtherText(e.target.value)} className="mt-3 w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500" placeholder="Préciser l'autre pièce fournie" />}
-              </div>
-            </>}
-            <div className="md:col-span-3 text-right pt-2"><button type="submit" className="px-5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700">Créer le client</button></div>
-          </form>
         </div>
       )}
 
@@ -921,7 +861,6 @@ export default function ClientManagement({ currentUser }: Props) {
                       </div>
                     ) : (
                       <div className="flex flex-wrap gap-2">
-                        {/* 19.2: Bouton grisé si compte épargne actif existe déjà */}
                         {!savingsAcc ? (
                           <button onClick={() => setSavingClient(viewClient)} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 shadow-sm shadow-emerald-200">
                             <PiggyBank className="h-4 w-4" /> Ouvrir un compte épargne
