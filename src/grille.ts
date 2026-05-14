@@ -4,11 +4,11 @@ import { getCyclePlan } from './cotisationCycle';
 // ─── APPRENANTS GRILLE ────────────────────────────────────────────────────────
 
 export const GRILLE: GrilleRow[] = [
-  { numero: 1,  fraisMin: 0,       fraisMax: 30000,  fraisDossier: 600,  fraisAssurance: 0,    fraisPrestation: 4050,  cotisationJournaliere: 150 },
-  { numero: 2,  fraisMin: 30001,   fraisMax: 40000,  fraisDossier: 600,  fraisAssurance: 0,    fraisPrestation: 5400,  cotisationJournaliere: 200 },
-  { numero: 3,  fraisMin: 40001,   fraisMax: 50000,  fraisDossier: 600,  fraisAssurance: 0,    fraisPrestation: 6750,  cotisationJournaliere: 250 },
-  { numero: 4,  fraisMin: 50001,   fraisMax: 60000,  fraisDossier: 600,  fraisAssurance: 0,    fraisPrestation: 8100,  cotisationJournaliere: 300 },
-  { numero: 5,  fraisMin: 60001,   fraisMax: 70000,  fraisDossier: 600,  fraisAssurance: 0,    fraisPrestation: 9450,  cotisationJournaliere: 350 },
+  { numero: 1,  fraisMin: 0,       fraisMax: 30000,  fraisDossier: 600,  fraisAssurance: 1000, fraisPrestation: 4050,  cotisationJournaliere: 150 },
+  { numero: 2,  fraisMin: 30001,   fraisMax: 40000,  fraisDossier: 600,  fraisAssurance: 1000, fraisPrestation: 5400,  cotisationJournaliere: 200 },
+  { numero: 3,  fraisMin: 40001,   fraisMax: 50000,  fraisDossier: 600,  fraisAssurance: 1000, fraisPrestation: 6750,  cotisationJournaliere: 250 },
+  { numero: 4,  fraisMin: 50001,   fraisMax: 60000,  fraisDossier: 600,  fraisAssurance: 1000, fraisPrestation: 8100,  cotisationJournaliere: 300 },
+  { numero: 5,  fraisMin: 60001,   fraisMax: 70000,  fraisDossier: 600,  fraisAssurance: 1000, fraisPrestation: 9450,  cotisationJournaliere: 350 },
   { numero: 6,  fraisMin: 70001,   fraisMax: 80000,  fraisDossier: 1000, fraisAssurance: 1000, fraisPrestation: 10800, cotisationJournaliere: 400 },
   { numero: 7,  fraisMin: 80001,   fraisMax: 90000,  fraisDossier: 1000, fraisAssurance: 1000, fraisPrestation: 12150, cotisationJournaliere: 450 },
   { numero: 8,  fraisMin: 90001,   fraisMax: 100000, fraisDossier: 1000, fraisAssurance: 1000, fraisPrestation: 13500, cotisationJournaliere: 500 },
