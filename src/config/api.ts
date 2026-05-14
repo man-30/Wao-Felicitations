@@ -68,6 +68,10 @@ export const api = {
   async getClient(id: string) {
     return this.request<any>(`/api/clients/${id}`);
   },
+  
+  async wipeClients() {
+    return this.request<any>('/api/admin/wipe-clients', { method: 'DELETE' });
+  },
 
   // Transactions
   async getTransactions() {

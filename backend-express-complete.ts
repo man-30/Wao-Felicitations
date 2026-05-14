@@ -480,6 +480,35 @@ app.post('/api/clients/import-excel', authenticateToken, requireRole('admin'), a
 })
 
 /**
+ * DELETE /api/admin/wipe-clients
+ * Remise à zéro de la base client (Admin uniquement)
+ */
+app.delete('/api/admin/wipe-clients', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    console.log(`[WIPE] Reset requested by ${req.user!.email}`)
+    
+    // Reverse dependency deletion
+    await prisma.$transaction([
+      prisma.cotisation.deleteMany({}),
+      prisma.transaction.deleteMany({}),
+      prisma.insuranceTransaction.deleteMany({}),
+      prisma.schoolDebt.deleteMany({}),
+      prisma.tontineAccount.deleteMany({}),
+      prisma.financementNonApprenant.deleteMany({}),
+      prisma.apprenant.deleteMany({}),
+      prisma.nonApprenant.deleteMany({}),
+      prisma.account.deleteMany({}),
+      prisma.client.deleteMany({}),
+    ])
+
+    res.json({ message: 'Toutes les données clients, comptes et transactions ont été supprimées avec succès.' })
+  } catch (error: any) {
+    console.error('[WIPE ERROR]', error)
+    res.status(500).json({ error: 'Wipe failed', message: error.message })
+  }
+})
+
+/**
  * GET /api/clients/:clientId
  * Récupère les détails d'un client
  */

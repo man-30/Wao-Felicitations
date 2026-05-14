@@ -153,6 +153,8 @@ export default function AdminCockpit({ currentUser }: AdminCockpitProps) {
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentReason, setPaymentReason] = useState('');
   const [feedback, setFeedback] = useState('');
+  const [isWiping, setIsWiping] = useState(false);
+  const [showWipeConfirm, setShowWipeConfirm] = useState(false);
 
   const referenceDate = useMemo(() => {
     const allDates = [
@@ -499,6 +501,27 @@ export default function AdminCockpit({ currentUser }: AdminCockpitProps) {
     setPaymentAmount(0);
     setPaymentReason('');
     setFeedback(`Paiement positionné pour ${selectedUser.name}. Le caissier a été notifié dans l'onglet Paiements.`);
+  };
+
+  const handleWipeData = async () => {
+    setIsWiping(true);
+    try {
+      await api.wipeClients();
+      // Clear local state
+      setClients([]);
+      setTransactions([]);
+      // Clear local DB cache
+      db.saveClients([]);
+      db.saveTransactions([]);
+      db.addLog(currentUser.id, currentUser.name, currentUser.role, 'REMISE À ZÉRO', 'Suppression totale de la base client et des transactions par l\'administrateur.');
+      
+      setFeedback('La base de données clients a été intégralement vidée.');
+      setShowWipeConfirm(false);
+    } catch (err: any) {
+      setFeedback(`Erreur lors de la remise à zéro: ${err.message}`);
+    } finally {
+      setIsWiping(false);
+    }
   };
 
   const userStats = {
@@ -1011,6 +1034,62 @@ export default function AdminCockpit({ currentUser }: AdminCockpitProps) {
           </div>
         </div>
       </section>
+
+      {/* ── Zone de Danger ────────────────────────────────────────────────── */}
+      <section className="rounded-3xl border-2 border-rose-100 bg-rose-50/50 p-6 shadow-sm">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
+            <h2 className="text-lg font-bold text-rose-900 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-rose-600" /> Zone de Danger
+            </h2>
+            <p className="text-sm text-rose-700 max-w-xl">
+              Cette action supprimera **définitivement** tous les clients, comptes (épargne/tontine), dettes scolaires et transactions. 
+              Utilisez cette option uniquement si vous souhaitez recommencer l'importation de zéro.
+            </p>
+          </div>
+          <button 
+            onClick={() => setShowWipeConfirm(true)}
+            className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-6 py-3 text-sm font-bold text-white hover:bg-rose-700 shadow-lg shadow-rose-200 transition-all hover:scale-105 active:scale-95"
+          >
+            <RefreshCw className="h-4 w-4" /> Remise à zéro de la base
+          </button>
+        </div>
+      </section>
+
+      {showWipeConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl ring-4 ring-rose-500/20">
+            <div className="text-center space-y-4">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-rose-100">
+                <AlertTriangle className="h-8 w-8 text-rose-600" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-slate-900">Confirmation de suppression</h3>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Êtes-vous absolument sûr ? Cette action est **irréversible**. <br/>
+                  Toutes les données clients et transactions seront effacées du serveur et de votre navigateur.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 pt-4">
+                <button 
+                  onClick={handleWipeData}
+                  disabled={isWiping}
+                  className="w-full rounded-2xl bg-rose-600 py-3 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50"
+                >
+                  {isWiping ? 'Suppression en cours...' : 'Oui, supprimer toutes les données'}
+                </button>
+                <button 
+                  onClick={() => setShowWipeConfirm(false)}
+                  disabled={isWiping}
+                  className="w-full rounded-2xl bg-slate-100 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200"
+                >
+                  Annuler
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
