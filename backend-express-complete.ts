@@ -263,6 +263,30 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     res.status(500).json({
       error: 'Login failed',
       message: error.message,
+      code: error.code // Useful for Prisma errors like P2002, etc.
+    })
+  }
+})
+
+/**
+ * GET /api/health
+ * Test database and server health
+ */
+app.get('/api/health', async (req: Request, res: Response) => {
+  try {
+    // Test prisma connection
+    await prisma.$queryRaw`SELECT 1`
+    res.json({ 
+      status: 'ok', 
+      database: 'connected',
+      timestamp: new Date().toISOString()
+    })
+  } catch (error: any) {
+    res.status(503).json({ 
+      status: 'error', 
+      database: 'disconnected', 
+      message: error.message,
+      code: error.code
     })
   }
 })
