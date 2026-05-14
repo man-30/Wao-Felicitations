@@ -56,61 +56,77 @@ export default function ExcelImportDialog({ onClose, onImportSuccess }: ExcelImp
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const buf = evt.target?.result;
-        const wb = XLSX.read(buf, { type: 'array' });
-        const wsname = wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
-        
-        // Get data as array of arrays to find the header row
-        const aoa = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
-        if (aoa.length === 0) throw new Error("Le fichier est vide.");
+        let allMappedData: ValidationResult[] = [];
+        let allDetectedKeys = new Set<string>();
 
-        // Discovery algorithm: find row with most keyword matches
-        const keywords = ['nom', 'compte', 'tel', 'phone', 'telephone', 'solde', 'balance', 'type'];
-        let headerRowIndex = 0;
-        let maxMatches = 0;
+        wb.SheetNames.forEach(wsname => {
+          const ws = wb.Sheets[wsname];
+          const aoa = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+          if (aoa.length === 0) return;
 
-        for (let i = 0; i < Math.min(aoa.length, 20); i++) {
-          const row = aoa[i];
-          if (!Array.isArray(row)) continue;
-          const matches = row.filter(cell => 
-            typeof cell === 'string' && 
-            keywords.some(kw => cell.toLowerCase().includes(kw))
-          ).length;
-          
-          if (matches > maxMatches) {
-            maxMatches = matches;
-            headerRowIndex = i;
-          }
-        }
+          // Discovery algorithm per sheet
+          const keywords = ['nom', 'compte', 'tel', 'phone', 'telephone', 'solde', 'balance', 'type', 'prénoms'];
+          let headerRowIndex = 0;
+          let maxMatches = 0;
 
-        // Parse with identified header row
-        const jsonData = XLSX.utils.sheet_to_json(ws, { range: headerRowIndex }) as any[];
-        setDetectedKeys(jsonData.length > 0 ? Object.keys(jsonData[0]) : []);
-
-        const mappedData: ValidationResult[] = jsonData.map((row: any) => {
-          const importRow: ImportRow = {
-            name: findKey(row, 'Nom Complet', 'Nom', 'Full Name', 'Nom et Prénoms', 'Prenoms', 'Prénoms') || '',
-            type: findKey(row, 'Type', 'Client Type') || 'simple',
-            phone: String(findKey(row, 'Téléphone', 'Tél', 'Phone', 'Tel', 'Contact', 'Numéro', 'Mobile') || ''),
-            address: findKey(row, 'Adresse', 'Address', 'Résidence', 'Ville', 'Quartier') || '',
-            accountNumber: findKey(row, 'N° De Compte', 'Compte', 'N° Compte', 'Account Number', 'Account', 'Code', 'ID') || '',
-            commercialName: findKey(row, 'Commercial', 'Agent', 'Promoteur', 'Vendeur', 'Gestionnaire') || '',
-            initialBalance: Number(findKey(row, 'Solde Initial', 'Solde', 'Initial Balance', 'Balance', 'Montant', 'Crédit') || 0),
-          };
-
-          let status: 'valid' | 'invalid' | 'warning' = 'valid';
-          let message = 'Prêt';
-
-          if (!importRow.name || !importRow.phone || !importRow.accountNumber) {
-            status = 'invalid';
-            message = `Manquant: ${!importRow.name ? 'Nom ' : ''}${!importRow.phone ? 'Tél ' : ''}${!importRow.accountNumber ? 'Compte' : ''}`;
+          for (let i = 0; i < Math.min(aoa.length, 30); i++) {
+            const row = aoa[i];
+            if (!Array.isArray(row)) continue;
+            const matches = row.filter(cell => 
+              typeof cell === 'string' && 
+              keywords.some(kw => cell.toLowerCase().includes(kw))
+            ).length;
+            
+            if (matches > maxMatches) {
+              maxMatches = matches;
+              headerRowIndex = i;
+            }
           }
 
-          return { row: importRow, status, message };
+          // Stop if this sheet seems to have no headers
+          if (maxMatches < 2 && aoa.length > 5) return;
+
+          const jsonData = XLSX.utils.sheet_to_json(ws, { range: headerRowIndex }) as any[];
+          if (jsonData.length > 0) {
+            Object.keys(jsonData[0]).forEach(k => allDetectedKeys.add(k));
+          }
+
+          const sheetMappedData: ValidationResult[] = jsonData.map((row: any) => {
+            const importRow: ImportRow = {
+              name: String(findKey(row, 'Nom Complet', 'Nom', 'Full Name', 'Nom et Prénoms', 'Prenoms', 'Prénoms') || '').trim(),
+              type: findKey(row, 'Type', 'Client Type') || 'simple',
+              phone: String(findKey(row, 'Téléphone', 'Tél', 'Phone', 'Tel', 'Contact', 'Numéro', 'Mobile', 'CONTACT') || '').trim(),
+              address: String(findKey(row, 'Adresse', 'Address', 'Résidence', 'Ville', 'Quartier', 'ADRESSE') || '').trim(),
+              accountNumber: String(findKey(row, 'N° De Compte', 'Compte', 'N° Compte', 'Account Number', 'Account', 'Code', 'ID') || '').trim(),
+              commercialName: String(findKey(row, 'Commercial', 'Agent', 'Promoteur', 'Vendeur', 'Gestionnaire') || '').trim(),
+              initialBalance: Number(findKey(row, 'Solde Initial', 'Solde', 'Initial Balance', 'Balance', 'Montant', 'Crédit') || 0),
+            };
+
+            let status: 'valid' | 'invalid' | 'warning' = 'valid';
+            let message = 'Prêt';
+
+            // Relaxation: Only Name and AccountNumber are strictly required for migration
+            if (!importRow.name || !importRow.accountNumber) {
+              status = 'invalid';
+              message = `Manquant: ${!importRow.name ? 'Nom ' : ''}${!importRow.accountNumber ? 'Compte' : ''}`;
+            } else if (!importRow.phone || importRow.phone === 'undefined' || importRow.phone === '') {
+              status = 'warning';
+              message = 'Téléphone manquant (sera importé vide)';
+            }
+
+            return { row: importRow, status, message };
+          });
+
+          // Filter out rows that are entirely empty or clearly not client data
+          const filteredSheetData = sheetMappedData.filter(d => 
+            d.row.name || d.row.accountNumber || d.row.phone
+          );
+
+          allMappedData = [...allMappedData, ...filteredSheetData];
         });
 
-        setData(mappedData);
+        setDetectedKeys(Array.from(allDetectedKeys));
+        setData(allMappedData);
       } catch (err: any) {
         console.error('Error parsing excel:', err);
         alert(`Erreur parsing: ${err.message}`);
