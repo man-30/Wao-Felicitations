@@ -145,4 +145,175 @@ export const db = {
     });
     db.saveLogs(logs);
   },
+  syncDataFromServer(apiClients: any[]) {
+    // 1. Clients
+    const clients: Client[] = apiClients.map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      membershipCode: c.membershipCode,
+      accountNumber: c.accountNumber,
+      type: c.type,
+      phone: c.phone,
+      address: c.address || '',
+      assignedCommercialId: c.assignedCommercialId,
+      savingsBalance: Number(c.savingsBalance || 0),
+      financingBalance: Number(c.financingBalance || 0),
+      schoolDebts: (c.schoolDebts || []).map((d: any) => ({
+        id: d.id,
+        schoolName: d.schoolName,
+        debtAmount: Number(d.debtAmount || 0),
+        paidAmount: Number(d.paidAmount || 0),
+        active: d.active,
+        createdAt: d.createdAt,
+      })),
+      createdAt: c.createdAt ? new Date(c.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+    }));
+    db.saveClients(clients);
+
+    // 2. Apprenants & TontineAccounts
+    const apprenants: Apprenant[] = [];
+    const tontineAccounts: TontineAccount[] = [];
+
+    // 3. NonApprenants & Financements
+    const nonApprenants: NonApprenant[] = [];
+    const financements: FinancementNonApprenant[] = [];
+
+    // 4. Accounts
+    const accounts: Account[] = [];
+
+    apiClients.forEach((c: any) => {
+      // Extract accounts
+      if (c.accounts && Array.isArray(c.accounts)) {
+        c.accounts.forEach((acc: any) => {
+          accounts.push({
+            id: acc.id,
+            clientId: acc.clientId,
+            type: acc.type,
+            balance: Number(acc.balance || 0),
+            linkedAccountId: acc.linkedAccountId,
+            accountNumber: acc.accountNumber,
+            label: acc.label,
+            status: acc.status,
+            principalAmount: acc.principalAmount ? Number(acc.principalAmount) : undefined,
+            dossierFee: acc.dossierFee ? Number(acc.dossierFee) : undefined,
+            insuranceFee: acc.insuranceFee ? Number(acc.insuranceFee) : undefined,
+            prestationFee: acc.prestationFee ? Number(acc.prestationFee) : undefined,
+            dailyContribution: acc.dailyContribution ? Number(acc.dailyContribution) : undefined,
+            totalDue: acc.totalDue ? Number(acc.totalDue) : undefined,
+            totalPaid: acc.totalPaid ? Number(acc.totalPaid) : undefined,
+            residualBalance: acc.residualBalance ? Number(acc.residualBalance) : undefined,
+            createdBy: acc.createdBy,
+            createdByName: acc.createdByName,
+            notes: acc.notes,
+            createdAt: acc.createdAt,
+          });
+        });
+      }
+
+      // Extract Apprenant
+      if (c.apprenant) {
+        const ap = c.apprenant;
+        apprenants.push({
+          id: ap.id,
+          clientId: ap.clientId,
+          studentName: ap.studentName,
+          studentBirthDate: ap.studentBirthDate ? new Date(ap.studentBirthDate).toISOString().split('T')[0] : undefined,
+          schoolName: ap.schoolName,
+          schoolLevel: ap.schoolLevel,
+          schoolYear: ap.schoolYear,
+          guardian: ap.guardian ? {
+            id: ap.guardian.id,
+            fullName: ap.guardian.fullName,
+            phone: ap.guardian.phone,
+            relationship: ap.guardian.relationship,
+            idNumber: ap.guardian.idNumber || undefined,
+          } : { id: 'g_' + Date.now(), fullName: 'N/A', phone: 'N/A', relationship: 'N/A' },
+          caution: ap.caution ? {
+            id: ap.caution.id,
+            fullName: ap.caution.fullName,
+            phone: ap.caution.phone,
+            idNumber: ap.caution.idNumber || undefined,
+            profession: ap.caution.profession || undefined,
+          } : { id: 'ca_' + Date.now(), fullName: 'N/A', phone: 'N/A' },
+          documents: ap.documents || [],
+          createdBy: ap.createdBy,
+          createdAt: ap.createdAt ? new Date(ap.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        });
+
+        if (ap.tontineAccounts && Array.isArray(ap.tontineAccounts)) {
+          ap.tontineAccounts.forEach((ta: any) => {
+            tontineAccounts.push({
+              id: ta.id,
+              apprenantId: ta.apprenantId,
+              numero: ta.numero,
+              schoolName: ta.schoolName,
+              schoolLevel: ta.schoolLevel,
+              fraisScolarite: Number(ta.fraisScolarite || 0),
+              grilleNumero: Number(ta.grilleNumero || 0),
+              fraisDossier: Number(ta.fraisDossier || 0),
+              fraisAssurance: Number(ta.fraisAssurance || 0),
+              fraisPrestation: Number(ta.fraisPrestation || 0),
+              cotisationJournaliere: Number(ta.cotisationJournaliere || 0),
+              totalCapital: Number(ta.totalCapital || 0),
+              totalCotise: Number(ta.totalCotise || 0),
+              totalBeneficeCases: ta.totalBeneficeCases ? Number(ta.totalBeneficeCases) : 0,
+              totalJours: Number(ta.totalJours || 0),
+              status: ta.status,
+              adhesionPaid: Number(ta.adhesionPaid || 0),
+              carnetPaid: Number(ta.carnetPaid || 0),
+              createdAt: ta.createdAt ? new Date(ta.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+            });
+          });
+        }
+      }
+
+      // Extract NonApprenant
+      if (c.nonApprenant) {
+        const na = c.nonApprenant;
+        nonApprenants.push({
+          id: na.id,
+          clientId: na.clientId,
+          fullName: na.fullName,
+          phone: na.phone,
+          idNumber: na.idNumber,
+          documents: na.documents || { pieceIdentite: false, photos: false },
+          adhesionPaid: na.adhesionPaid || false,
+          carnetPaid: na.carnetPaid || false,
+          createdBy: na.createdBy,
+          createdAt: na.createdAt ? new Date(na.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        });
+
+        if (na.financements && Array.isArray(na.financements)) {
+          na.financements.forEach((f: any) => {
+            financements.push({
+              id: f.id,
+              nonApprenantId: f.nonApprenantId,
+              bienFinance: f.bienFinance,
+              valeurBien: Number(f.valeurBien || 0),
+              apportPersonnel: Number(f.apportPersonnel || 0),
+              apportPourcentage: f.apportPourcentage ? Number(f.apportPourcentage) : undefined,
+              montantFinance: Number(f.montantFinance || 0),
+              dureeChoisie: f.dureeChoisie,
+              fraisDossier: Number(f.fraisDossier || 0),
+              fraisPrestation: Number(f.fraisPrestation || 0),
+              cotisationJournaliere: Number(f.cotisationJournaliere || 0),
+              totalARembourser: Number(f.totalARembourser || 0),
+              totalCotise: Number(f.totalCotise || 0),
+              totalBeneficeCases: f.totalBeneficeCases ? Number(f.totalBeneficeCases) : 0,
+              totalCases: f.totalCases ? Number(f.totalCases) : 0,
+              status: f.status,
+              createdAt: f.createdAt ? new Date(f.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+            });
+          });
+        }
+      }
+    });
+
+    db.saveApprenants(apprenants);
+    db.saveTontineAccounts(tontineAccounts);
+    db.saveNonApprenants(nonApprenants);
+    db.saveFinancements(financements);
+    db.saveAccounts(accounts);
+  },
 };
+

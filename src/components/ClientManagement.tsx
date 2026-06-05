@@ -28,7 +28,7 @@ export default function ClientManagement({ currentUser }: Props) {
         api.getUsers()
       ]);
       setClients(apiClients);
-      db.saveClients(apiClients);
+      db.syncDataFromServer(apiClients);
       setCommercials(apiUsers.filter(u => u.role === 'commercial'));
     } catch (err: any) {
       setBackendError(err.message || 'Impossible de charger les données.');

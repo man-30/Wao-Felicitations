@@ -116,7 +116,7 @@ export default function AdminCockpit({ currentUser }: AdminCockpitProps) {
         setClients(apiClients);
         // Sync with local DB for consistency in other components
         db.saveUsers(apiUsers);
-        db.saveClients(apiClients);
+        db.syncDataFromServer(apiClients);
       } catch (err) {
         console.error('Failed to sync admin data with backend:', err);
       }

@@ -39,6 +39,8 @@ import {
 import { authenticateToken, requireRole, requirePermission, validateZoneAccess, errorHandler } from './lib/middleware/auth.ts'
 import {
   createClientWithCodes,
+  createApprenantEnrollment,
+  createNonApprenantEnrollment,
   recordCotisation,
   recordAdvancedDeposit,
   transferFinancementToSavings,
@@ -358,7 +360,7 @@ app.post('/api/clients', authenticateToken, requireRole('admin', 'commercial', '
 
     // Créer le client avec codes auto-générés
     // Admin utilise son propre ID si aucun commercial spécifié
-    const assignedCommercialId = req.body.commercialId || req.user!.userId
+    const assignedCommercialId = req.body.assignedCommercialId || req.body.commercialId || req.user!.userId
 
     const client = await createClientWithCodes({
       name,
@@ -371,24 +373,40 @@ app.post('/api/clients', authenticateToken, requireRole('admin', 'commercial', '
     // Logger
     await logCreateClient(req.user!.userId, req.user!.email, req.user!.role, client.id, client.name, client.type)
 
-    res.status(201).json({
-      id: client.id,
-      name: client.name,
-      membershipCode: client.membershipCode,
-      accountNumber: client.accountNumber,
-      type: client.type,
-      client: {
-        id: client.id,
-        name: client.name,
-        membershipCode: client.membershipCode,
-        accountNumber: client.accountNumber,
-        type: client.type,
-      },
-      message: 'Client created successfully with auto-generated codes',
-    })
-  } catch (error) {
+    res.status(201).json(client)
+  } catch (error: any) {
     console.error('Create client error:', error)
-    res.status(500).json({ error: 'Failed to create client' })
+    res.status(500).json({ error: 'Failed to create client', details: error.message })
+  }
+})
+
+/**
+ * POST /api/apprenants
+ * Inscription complète apprenant
+ */
+app.post('/api/apprenants', authenticateToken, requireRole('admin', 'caissier', 'commercial'), async (req: Request, res: Response) => {
+  try {
+    const result = await createApprenantEnrollment(req.body)
+    await logCreateClient(req.user!.userId, req.user!.email, req.user!.role, result.client.id, result.client.name, result.client.type)
+    res.status(201).json(result)
+  } catch (error: any) {
+    console.error('Error in apprenant enrollment:', error)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+/**
+ * POST /api/non-apprenants
+ * Inscription complète non-apprenant
+ */
+app.post('/api/non-apprenants', authenticateToken, requireRole('admin', 'caissier', 'commercial'), async (req: Request, res: Response) => {
+  try {
+    const result = await createNonApprenantEnrollment(req.body)
+    await logCreateClient(req.user!.userId, req.user!.email, req.user!.role, result.client.id, result.client.name, result.client.type)
+    res.status(201).json(result)
+  } catch (error: any) {
+    console.error('Error in non-apprenant enrollment:', error)
+    res.status(500).json({ error: error.message })
   }
 })
 
@@ -518,8 +536,18 @@ app.get('/api/clients/:clientId', authenticateToken, async (req: Request, res: R
       where: { id: req.params.clientId },
       include: {
         accounts: true,
-        apprenant: true,
-        nonApprenant: true,
+        apprenant: {
+          include: {
+            tontineAccounts: true,
+            guardian: true,
+            caution: true
+          }
+        },
+        nonApprenant: {
+          include: {
+            financements: true
+          }
+        },
         schoolDebts: true,
         transactions: { take: 10, orderBy: { createdAt: 'desc' } },
       },
@@ -546,14 +574,64 @@ app.get('/api/clients', authenticateToken, async (req: Request, res: Response) =
       include: {
         accounts: true,
         schoolDebts: true,
-        apprenant: true,
-        nonApprenant: true,
+        apprenant: {
+          include: {
+            tontineAccounts: true,
+            guardian: true,
+            caution: true
+          }
+        },
+        nonApprenant: {
+          include: {
+            financements: true
+          }
+        },
       }
     })
     res.json(clients)
   } catch (error) {
     console.error('Fetch clients error:', error)
     res.status(500).json({ error: 'Failed to fetch clients' })
+  }
+})
+
+/**
+ * GET /api/clients/me
+ * Récupère les clients assignés au commercial connecté
+ * Utilisé pour la synchronisation temps réel du CommercialDashboard
+ */
+app.get('/api/clients/me', authenticateToken, requireRole('commercial', 'admin'), async (req: Request, res: Response) => {
+  try {
+    // Si l'utilisateur est admin, retourner tous les clients
+    // Sinon, retourner seulement les clients assignés au commercial
+    const whereClause = req.user!.role === 'admin' 
+      ? {} 
+      : { assignedCommercialId: req.user!.userId };
+
+    const clients = await prisma.client.findMany({
+      where: whereClause,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        accounts: true,
+        schoolDebts: true,
+        apprenant: {
+          include: {
+            tontineAccounts: true,
+            guardian: true,
+            caution: true
+          }
+        },
+        nonApprenant: {
+          include: {
+            financements: true
+          }
+        },
+      }
+    })
+    res.json(clients)
+  } catch (error) {
+    console.error('Fetch my clients error:', error)
+    res.status(500).json({ error: 'Failed to fetch my clients' })
   }
 })
 

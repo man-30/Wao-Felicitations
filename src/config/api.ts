@@ -58,8 +58,26 @@ export const api = {
     return this.request<any[]>('/api/clients');
   },
 
+  async getMyClients() {
+    return this.request<any[]>('/api/clients/me');
+  },
+
   async createClient(data: any) {
     return this.request<any>('/api/clients', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async createApprenant(data: any) {
+    return this.request<any>('/api/apprenants', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async createNonApprenant(data: any) {
+    return this.request<any>('/api/non-apprenants', {
       method: 'POST',
       body: JSON.stringify(data),
     });

@@ -9,8 +9,6 @@ import { prisma } from '../prisma.ts'
 
 // ───────────────────────────────────────────────────────────────────────────
 // CLIENT CREATION WITH AUTO-GENERATED CODES
-// ───────────────────────────────────────────────────────────────────────────
-
 /**
  * Crée un client avec génération automatique des codes uniques
  */
@@ -71,6 +69,221 @@ export async function createClientWithCodes(data: {
     })
 
     return client
+  })
+}
+
+/**
+ * Inscription complète d'un Apprenant
+ */
+export async function createApprenantEnrollment(data: {
+  client: {
+    name: string
+    type: 'apprenant'
+    phone: string
+    address?: string
+    assignedCommercialId: string
+  },
+  apprenant: {
+    studentBirthDate?: Date
+    schoolName: string
+    schoolLevel: string
+    schoolYear: string
+    guardian: {
+      fullName: string
+      phone: string
+      relationship: string
+      idNumber?: string
+    }
+    caution: {
+      fullName: string
+      phone: string
+      idNumber?: string
+      profession?: string
+    }
+    documents: any[]
+  },
+  tontine: {
+    numero: string
+    fraisScolarite: number
+    grilleNumero: number
+    fraisDossier: number
+    fraisAssurance: number
+    fraisPrestation: number
+    cotisationJournaliere: number
+    totalCapital: number
+    adhesionPaid: number
+    carnetPaid: number
+  },
+  createdBy: string
+}) {
+  const membershipCode = generateMembershipCode()
+  const accountNumber = generateAccountNumber()
+
+  return prisma.$transaction(async (tx) => {
+    // 1. Client
+    const client = await tx.client.create({
+      data: {
+        name: data.client.name,
+        type: 'apprenant',
+        phone: data.client.phone,
+        address: data.client.address || '',
+        assignedCommercialId: data.client.assignedCommercialId,
+        membershipCode,
+        accountNumber,
+        savingsBalance: new Decimal(0),
+        financingBalance: new Decimal(-data.tontine.totalCapital),
+      }
+    })
+
+    // 2. Guardian + Caution
+    const guardian = await tx.guardian.create({
+      data: data.apprenant.guardian
+    })
+    const caution = await tx.caution.create({
+      data: data.apprenant.caution
+    })
+
+    // 3. Apprenant
+    const apprenant = await tx.apprenant.create({
+      data: {
+        clientId: client.id,
+        studentName: data.client.name,
+        studentBirthDate: data.apprenant.studentBirthDate || null,
+        schoolName: data.apprenant.schoolName,
+        schoolLevel: data.apprenant.schoolLevel,
+        schoolYear: data.apprenant.schoolYear,
+        guardianId: guardian.id,
+        cautionId: caution.id,
+        documents: data.apprenant.documents,
+        createdBy: data.createdBy,
+      }
+    })
+
+    // 4. TontineAccount
+    const tontine = await tx.tontineAccount.create({
+      data: {
+        apprenantId: apprenant.id,
+        numero: data.tontine.numero,
+        schoolName: data.apprenant.schoolName,
+        schoolLevel: data.apprenant.schoolLevel,
+        fraisScolarite: new Decimal(data.tontine.fraisScolarite),
+        grilleNumero: data.tontine.grilleNumero,
+        fraisDossier: new Decimal(data.tontine.fraisDossier),
+        fraisAssurance: new Decimal(data.tontine.fraisAssurance),
+        fraisPrestation: new Decimal(data.tontine.fraisPrestation),
+        cotisationJournaliere: new Decimal(data.tontine.cotisationJournaliere),
+        totalCapital: new Decimal(data.tontine.totalCapital),
+        totalCotise: new Decimal(0),
+        totalJours: 0,
+        status: 'actif',
+        adhesionPaid: new Decimal(data.tontine.adhesionPaid),
+        carnetPaid: new Decimal(data.tontine.carnetPaid),
+      }
+    })
+
+    // 5. SchoolDebt record
+    await tx.schoolDebt.create({
+      data: {
+        clientId: client.id,
+        schoolName: data.apprenant.schoolName,
+        debtAmount: new Decimal(data.tontine.totalCapital),
+        paidAmount: new Decimal(0),
+        active: true
+      }
+    })
+
+    return { client, apprenant, tontine }
+  })
+}
+
+/**
+ * Inscription complète d'un Non-Apprenant
+ */
+export async function createNonApprenantEnrollment(data: {
+  client: {
+    name: string
+    type: 'non_apprenant'
+    phone: string
+    address?: string
+    assignedCommercialId: string
+  },
+  nonApprenant: {
+    idNumber: string
+    documents: any
+  },
+  financement?: {
+    bienFinance: string
+    valeurBien: number
+    apportPersonnel: number
+    apportPourcentage: number
+    montantFinance: number
+    dureeChoisie: any
+    grilleNumero: number
+    fraisDossier: number
+    fraisPrestation: number
+    cotisationJournaliere: number
+    totalARembourser: number
+    totalCases: number
+  },
+  createdBy: string
+}) {
+  const membershipCode = generateMembershipCode()
+  const accountNumber = generateAccountNumber()
+
+  return prisma.$transaction(async (tx) => {
+    // 1. Client
+    const client = await tx.client.create({
+      data: {
+        name: data.client.name,
+        type: 'non_apprenant',
+        phone: data.client.phone,
+        address: data.client.address || '',
+        assignedCommercialId: data.client.assignedCommercialId,
+        membershipCode,
+        accountNumber,
+        savingsBalance: new Decimal(0),
+        financingBalance: new Decimal(data.financement ? -data.financement.totalARembourser : 0),
+      }
+    })
+
+    // 2. NonApprenant
+    const na = await tx.nonApprenant.create({
+      data: {
+        clientId: client.id,
+        fullName: data.client.name,
+        phone: data.client.phone,
+        idNumber: data.nonApprenant.idNumber || 'N/A',
+        documents: data.nonApprenant.documents,
+        adhesionPaid: true,
+        carnetPaid: true,
+        createdBy: data.createdBy,
+      }
+    })
+
+    // 3. Optional Financement
+    if (data.financement) {
+      await tx.financementNonApprenant.create({
+        data: {
+          nonApprenantId: na.id,
+          bienFinance: data.financement.bienFinance,
+          valeurBien: new Decimal(data.financement.valeurBien),
+          apportPersonnel: new Decimal(data.financement.apportPersonnel),
+          apportPourcentage: new Decimal(data.financement.apportPourcentage),
+          montantFinance: new Decimal(data.financement.montantFinance),
+          dureeChoisie: data.financement.dureeChoisie,
+          grilleNumero: data.financement.grilleNumero,
+          fraisDossier: new Decimal(data.financement.fraisDossier),
+          fraisPrestation: new Decimal(data.financement.fraisPrestation),
+          cotisationJournaliere: new Decimal(data.financement.cotisationJournaliere),
+          totalARembourser: new Decimal(data.financement.totalARembourser),
+          totalCotise: new Decimal(0),
+          totalCases: data.financement.totalCases,
+          status: 'actif'
+        }
+      })
+    }
+
+    return { client, nonApprenant: na }
   })
 }
 
@@ -404,6 +617,8 @@ export async function transferFinancementToSavings(
 
 export default {
   createClientWithCodes,
+  createApprenantEnrollment,
+  createNonApprenantEnrollment,
   recordTransaction,
   validateTransaction,
   recordCotisation,

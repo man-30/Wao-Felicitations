@@ -125,143 +125,149 @@ export default function ApprenantEnrollment({ currentUser }: Props) {
     setStep(s => s + 1);
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!calcul) return;
     setError('');
 
-    const apId   = 'ap_' + Date.now();
-    const clientId = 'c_' + Date.now();
-    const taId   = 'ta_' + Date.now();
-    const taNum  = db.nextAccountNumber();
-    const now    = today();
+    try {
+      const now    = today();
+      const taNum  = db.nextAccountNumber();
 
-    const docs: ApprenantDocument[] = DOC_KEYS.map(d => ({
-      key: d.key, label: d.label, status: docStatus[d.key] || 'en_attente',
-    }));
+      const enrollmentData = {
+        client: {
+          name: studentName,
+          type: 'apprenant',
+          phone: parentPhone || guardianPhone,
+          assignedCommercialId: commercialId,
+        },
+        apprenant: {
+          studentBirthDate: studentBirth ? new Date(studentBirth) : undefined,
+          schoolName,
+          schoolLevel,
+          schoolYear,
+          guardian: {
+            fullName: guardianName,
+            phone: guardianPhone,
+            relationship: guardianRel,
+            idNumber: guardianId,
+          },
+          caution: {
+            fullName: cautionName,
+            phone: cautionPhone,
+            idNumber: cautionId,
+            profession: cautionFunction,
+          },
+          documents: DOC_KEYS.map(d => ({
+            key: d.key, label: d.label, status: docStatus[d.key] || 'en_attente',
+          })),
+        },
+        tontine: {
+          numero: taNum,
+          fraisScolarite,
+          grilleNumero: calcul.row.numero,
+          fraisDossier: calcul.fraisDossier,
+          fraisAssurance: calcul.fraisAssurance,
+          fraisPrestation: calcul.fraisPrestation,
+          cotisationJournaliere: calcul.cotisationJournaliere,
+          totalCapital: calcul.totalARembourser,
+          adhesionPaid: ADHESION_MONTANT,
+          carnetPaid: CARNET_MONTANT,
+        },
+        createdBy: currentUser.id,
+      };
 
-    const guardian: Guardian = {
-      id: 'g_' + Date.now(), fullName: guardianName, phone: guardianPhone,
-      relationship: guardianRel, idNumber: guardianId,
-    };
-    const caution: Caution = {
-      id: 'ca_' + Date.now(), fullName: cautionName, phone: cautionPhone, idNumber: cautionId,
-    };
+      const result = await api.createApprenant(enrollmentData);
+      
+      // Update local state (for immediate UI response, though ideally we'd refetch)
+      const newAp = {
+        id: result.apprenant.id,
+        clientId: result.client.id,
+        studentName,
+        studentBirthDate: studentBirth,
+        schoolName,
+        schoolLevel,
+        schoolYear,
+        guardian: enrollmentData.apprenant.guardian as any,
+        caution: enrollmentData.apprenant.caution as any,
+        documents: enrollmentData.apprenant.documents as any,
+        createdBy: currentUser.id,
+        createdAt: now,
+      };
 
-    // Create generic client record
-    const newClient: Client = {
-      id: clientId, name: studentName, type: 'apprenant',
-      membershipCode: db.generateMembershipCode(),
-      accountNumber: db.generateClientAccountNumber(),
-      phone: parentPhone || guardianPhone,
-      address: '', assignedCommercialId: commercialId,
-      savingsBalance: 0,
-      financingBalance: -calcul.totalARembourser, // Dette = négatif
-      schoolDebts: [{
-        id: 'd_' + Date.now(), schoolName, debtAmount: calcul.totalARembourser,
-        paidAmount: 0, active: true, createdAt: now,
-      }],
-      createdAt: now,
-    };
+      const ta = {
+        id: result.tontine.id,
+        apprenantId: result.apprenant.id,
+        numero: taNum,
+        createdAt: now,
+        schoolName,
+        schoolLevel,
+        fraisScolarite,
+        grilleNumero: calcul.row.numero,
+        fraisDossier: calcul.fraisDossier,
+        fraisAssurance: calcul.fraisAssurance,
+        fraisPrestation: calcul.fraisPrestation,
+        cotisationJournaliere: calcul.cotisationJournaliere,
+        totalCapital: calcul.totalARembourser,
+        totalCotise: 0,
+        totalBeneficeCases: 0,
+        totalJours: 0,
+        status: 'actif' as const,
+        adhesionPaid: ADHESION_MONTANT,
+        carnetPaid: CARNET_MONTANT,
+      };
 
-    const newAp: Apprenant = {
-      id: apId, clientId,
-      studentName, studentBirthDate: studentBirth,
-      schoolName, schoolLevel, schoolYear,
-      guardian, caution, documents: docs,
-      createdBy: currentUser.id, createdAt: now,
-    };
+      // Also update localStorage for backward compatibility if needed, 
+      // but the goal is to move to API
+      db.saveClients([...db.getClients(), result.client]);
+      db.saveApprenants([...db.getApprenants(), newAp]);
+      db.saveTontineAccounts([...db.getTontineAccounts(), ta]);
 
-    const ta: TontineAccount = {
-      id: taId, apprenantId: apId, numero: taNum, createdAt: now,
-      schoolName, schoolLevel, fraisScolarite,
-      grilleNumero:          calcul.row.numero,
-      fraisDossier:          calcul.fraisDossier,
-      fraisAssurance:        calcul.fraisAssurance,
-      fraisPrestation:       calcul.fraisPrestation,
-      cotisationJournaliere: calcul.cotisationJournaliere,
-      totalCapital:          calcul.totalARembourser,
-      totalCotise:           0,
-      totalBeneficeCases:    0,
-      totalJours:            0,
-      status:                'actif',
-      adhesionPaid:          ADHESION_MONTANT,
-      carnetPaid:            CARNET_MONTANT,
-    };
+      // Record transactions locally still for the session
+      const txs = db.getTransactions();
+      const txAdhesion: any = {
+        id: 'tx_adh_' + Date.now(), clientId: result.client.id, clientName: studentName,
+        type: 'adhesion', amount: ADHESION_MONTANT, date: now,
+        collectedBy: currentUser.id, collectedByName: currentUser.name,
+        validatedBy: currentUser.id, validatedByName: currentUser.name,
+        status: 'approved',
+        receiptNumber: `ADH-${taNum}`,
+        notes: 'Frais d\'adhésion non remboursable',
+      };
+      const txCarnet: any = {
+        id: 'tx_car_' + Date.now(), clientId: result.client.id, clientName: studentName,
+        type: 'carnet', amount: CARNET_MONTANT, date: now,
+        collectedBy: currentUser.id, collectedByName: currentUser.name,
+        validatedBy: currentUser.id, validatedByName: currentUser.name,
+        status: 'approved',
+        receiptNumber: `CAR-${taNum}`,
+        notes: 'Carnet de tontine scolaire',
+      };
+      db.saveTransactions([...txs, txAdhesion, txCarnet]);
 
-    // Persist
-    const clients  = [...db.getClients(), newClient];
-    const aps      = [...apprenants, newAp];
-    const accounts = [...tontineAccounts, ta];
-
-    db.saveClients(clients);
-    db.saveApprenants(aps);
-    db.saveTontineAccounts(accounts);
-
-    // Record adhesion + carnet as transactions
-    const txs = db.getTransactions();
-    const txAdhesion: Transaction = {
-      id: 'tx_adh_' + Date.now(), clientId, clientName: studentName,
-      type: 'adhesion', amount: ADHESION_MONTANT, date: now,
-      collectedBy: currentUser.id, collectedByName: currentUser.name,
-      validatedBy: currentUser.id, validatedByName: currentUser.name,
-      status: 'approved',
-      receiptNumber: `ADH-${taNum}`,
-      notes: 'Frais d\'adhésion non remboursable',
-    };
-    const txCarnet: Transaction = {
-      id: 'tx_car_' + Date.now(), clientId, clientName: studentName,
-      type: 'carnet', amount: CARNET_MONTANT, date: now,
-      collectedBy: currentUser.id, collectedByName: currentUser.name,
-      validatedBy: currentUser.id, validatedByName: currentUser.name,
-      status: 'approved',
-      receiptNumber: `CAR-${taNum}`,
-      notes: 'Carnet de tontine scolaire',
-    };
-    db.saveTransactions([...txs, txAdhesion, txCarnet]);
-
-    // Directive 17.7 — Crediting cash via Produits
-    const produits = db.getProduits();
-    const newProduits: typeof produits = [];
-    newProduits.push({ id: 'p_adh_' + Date.now(), category: 'Frais de dossiers', amount: ADHESION_MONTANT, description: `Adhésion apprenant ${studentName}`, date: now, recordedBy: currentUser.id, recordedByName: currentUser.name });
-    newProduits.push({ id: 'p_car_' + Date.now(), category: 'Vente de livret tontine', amount: CARNET_MONTANT, description: `Livret tontine ${studentName}`, date: now, recordedBy: currentUser.id, recordedByName: currentUser.name });
-    // Directive 19.6: assurance → caisse dédiée, PAS les produits généraux
-    if (calcul.fraisAssurance > 0) {
-      const insuranceTxs = db.getInsuranceTxs();
-      db.saveInsuranceTxs([
-        ...insuranceTxs,
-        {
-          id: 'ins_' + Date.now(),
-          amount: calcul.fraisAssurance,
-          type: 'credit' as const,
-          description: `Frais assurance - ${studentName} (${taNum})`,
-          clientId: clientId,
-          clientName: studentName,
-          date: now,
-          operatedBy: currentUser.id,
-          operatedByName: currentUser.name,
-        }
+      // Directive 17.7 — Crediting cash via Produits
+      const produitsArr = db.getProduits();
+      db.saveProduits([
+        ...produitsArr,
+        { id: 'p_adh_' + Date.now(), category: 'Frais de dossiers' as any, amount: ADHESION_MONTANT, description: `Adhésion apprenant ${studentName}`, date: now, recordedBy: currentUser.id, recordedByName: currentUser.name },
+        { id: 'p_car_' + Date.now(), category: 'Vente de livret tontine' as any, amount: CARNET_MONTANT, description: `Livret tontine ${studentName}`, date: now, recordedBy: currentUser.id, recordedByName: currentUser.name },
+        ...(calcul.fraisDossier > 0 ? [{ id: 'p_dos_' + Date.now(), category: 'Frais de dossiers' as any, amount: calcul.fraisDossier, description: `Frais dossier apprenant ${studentName}`, date: now, recordedBy: currentUser.id, recordedByName: currentUser.name }] : [])
       ]);
-    }
-    if (calcul.fraisDossier > 0) {
-      newProduits.push({ id: 'p_dos_' + Date.now(), category: 'Frais de dossiers', amount: calcul.fraisDossier, description: `Frais dossier apprenant ${studentName}`, date: now, recordedBy: currentUser.id, recordedByName: currentUser.name });
-    }
-    db.saveProduits([...produits, ...newProduits]);
 
-    db.addLog(currentUser.id, currentUser.name, currentUser.role, 'Inscription Apprenant',
-      `Apprenant ${studentName} inscrit. Compte tontine: ${taNum}. Frais scolarité: ${fmt(fraisScolarite)}. Cotisation/j: ${fmt(calcul.cotisationJournaliere)}`
-    );
-
-    if (calcul.fraisAssurance > 0) {
-      db.addLog(currentUser.id, currentUser.name, currentUser.role, 'Versement Caisse Assurance',
-        `Frais d'assurance ${fmt(calcul.fraisAssurance)} versé dans la caisse commune (apprenant ${studentName}, compte ${taNum}).`
+      // Logs
+      db.addLog(currentUser.id, currentUser.name, currentUser.role, 'Inscription Apprenant',
+        `Apprenant ${studentName} inscrit. Compte tontine: ${taNum}. Frais scolarité: ${fmt(fraisScolarite)}. Cotisation/j: ${fmt(calcul.cotisationJournaliere)}`
       );
-    }
 
-    setApprenants(aps);
-    setTontineAccounts(accounts);
-    confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
-    setReceiptData({ ap: newAp, ta });
-    resetWizard();
+      setApprenants([...apprenants, newAp]);
+      setTontineAccounts([...tontineAccounts, ta]);
+      
+      confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+      setReceiptData({ ap: newAp as any, ta: ta as any });
+      resetWizard();
+    } catch (err: any) {
+      console.error('Failed to create apprenant', err);
+      setError('Erreur lors de la création sur le serveur: ' + (err.message || 'Serveur injoignable'));
+    }
   };
 
   const filtered = apprenants.filter(a =>

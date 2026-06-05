@@ -102,98 +102,105 @@ export default function NonApprenantFinancement({ currentUser }: Props) {
     setStep(s => s + 1);
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     setError('');
-    const naId = 'na_' + Date.now();
-    const clientId = 'c_' + Date.now();
-    const now = today();
+    try {
+      const now = today();
+      const enrollmentData = {
+        client: {
+          name: fullName || "Adhérent Sans Nom",
+          type: 'non_apprenant' as const,
+          phone: phone || "0000",
+          assignedCommercialId: commercialId || currentUser.id,
+        },
+        nonApprenant: {
+          idNumber: idNumber || 'N/A',
+          documents: { pieceIdentite: pieceProvided, photos: photosProvided },
+        },
+        financement: (wantFinancement && calcul) ? {
+          bienFinance,
+          valeurBien,
+          apportPersonnel: calcul.apportLibre,
+          apportPourcentage: calcul.apportPourcentage,
+          montantFinance: calcul.montantFinance,
+          dureeChoisie,
+          grilleNumero: calcul.row.numero,
+          fraisDossier: calcul.fraisDossier,
+          fraisPrestation: calcul.fraisPrestation,
+          cotisationJournaliere: calcul.cotisationJournaliere,
+          totalARembourser: calcul.totalARembourser,
+          totalCases: 0,
+        } : undefined,
+        createdBy: currentUser.id,
+      };
 
-    // 1. Create generic client
-    const newClient: Client = {
-      id: clientId, 
-      name: fullName || "Adhérent Sans Nom", 
-      type: 'non-apprenant', 
-      phone: phone || "0000", 
-      address: '',
-      membershipCode: db.generateMembershipCode(),
-      accountNumber: db.generateClientAccountNumber(),
-      assignedCommercialId: commercialId || currentUser.id,
-      savingsBalance: 0,
-      financingBalance: calcul ? -calcul.totalARembourser : 0, // Dette = négatif
-      schoolDebts: [],
-      createdAt: now,
-    };
+      const result = await api.createNonApprenant(enrollmentData);
 
-    // 2. Create NonApprenant record
-    const newNa: NonApprenant = {
-      id: naId, clientId, fullName, phone, idNumber,
-      documents: { pieceIdentite: pieceProvided, photos: photosProvided },
-      adhesionPaid: true, carnetPaid: true,
-      createdBy: currentUser.id, createdAt: now,
-    };
-
-    // 3. Optional Financement
-    let newFn: FinancementNonApprenant | undefined;
-    if (wantFinancement && calcul) {
-      newFn = {
-        id: 'fn_' + Date.now(),
-        nonApprenantId: naId,
-        bienFinance, valeurBien,
-        apportPersonnel: calcul.apportLibre,
-        apportPourcentage: calcul.apportPourcentage,
-        montantFinance: calcul.montantFinance,
-        dureeChoisie,
-        fraisDossier: calcul.fraisDossier,
-        fraisPrestation: calcul.fraisPrestation,
-        cotisationJournaliere: calcul.cotisationJournaliere,
-        totalARembourser: calcul.totalARembourser,
-        totalCotise: 0,
-        totalBeneficeCases: 0,
-        totalCases: 0,
-        status: 'actif',
+      // Update local state
+      const newNa = {
+        id: result.nonApprenant.id,
+        clientId: result.client.id,
+        fullName: fullName || "Adhérent Sans Nom",
+        phone: phone || "0000",
+        idNumber: idNumber || 'N/A',
+        documents: { pieceIdentite: pieceProvided, photos: photosProvided },
+        adhesionPaid: true,
+        carnetPaid: true,
+        createdBy: currentUser.id,
         createdAt: now,
       };
+
+      let newFn: any = undefined;
+      if (result.nonApprenant.financements && result.nonApprenant.financements.length > 0) {
+        newFn = result.nonApprenant.financements[0];
+      }
+
+      // Persist locally for session
+      db.saveClients([...db.getClients(), result.client]);
+      db.saveNonApprenants([...db.getNonApprenants(), newNa]);
+      if (newFn) db.saveFinancements([...db.getFinancements(), newFn]);
+
+      setNonApprenants([...nonApprenants, newNa]);
+      setFinancements([...financements, ...(newFn ? [newFn] : [])]);
+      
+      confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+      setShowWizard(false);
+      // Transactions for fees
+      const txs = db.getTransactions();
+      const txAdh: any = {
+        id: 'tx_adh_na_' + Date.now(), clientId: result.client.id, clientName: fullName || "Adhérent Sans Nom",
+        type: 'adhesion', amount: ADHESION_NON_APPRENANT, date: now,
+        collectedBy: currentUser.id, collectedByName: currentUser.name,
+        validatedBy: currentUser.id, validatedByName: currentUser.name,
+        status: 'approved', notes: 'Adhésion Non-Apprenant non remboursable'
+      };
+      const txCar: any = {
+        id: 'tx_car_na_' + Date.now(), clientId: result.client.id, clientName: fullName || "Adhérent Sans Nom",
+        type: 'carnet', amount: CARNET_MONTANT, date: now,
+        collectedBy: currentUser.id, collectedByName: currentUser.name,
+        validatedBy: currentUser.id, validatedByName: currentUser.name,
+        status: 'approved', notes: 'Carnet de cotisation'
+      };
+      db.saveTransactions([...txs, txAdh, txCar]);
+
+      // Directive 17.7 — Crediting cash via Produits (adhésion uniquement à la création)
+      const produits = db.getProduits();
+      db.saveProduits([
+        ...produits,
+        { id: 'p_adh_' + Date.now(), category: 'Frais de dossiers' as any, amount: ADHESION_NON_APPRENANT, description: `Adhésion non-apprenant ${fullName || "Adhérent Sans Nom"}`, date: now, recordedBy: currentUser.id, recordedByName: currentUser.name },
+        { id: 'p_car_' + Date.now(), category: 'Vente de livret individuel' as any, amount: CARNET_MONTANT, description: `Livret cotisation ${fullName || "Adhérent Sans Nom"}`, date: now, recordedBy: currentUser.id, recordedByName: currentUser.name },
+      ]);
+
+      db.addLog(currentUser.id, currentUser.name, currentUser.role, 'Inscription Non-Apprenant',
+        `Non-Apprenant ${fullName || "Adhérent Sans Nom"} inscrit. Frais: 6000 F. ${wantFinancement ? 'Financement ' + bienFinance + ' ajouté.' : ''}`
+      );
+
+      setReceiptData({ na: newNa as any, fn: newFn as any });
+      resetWizard();
+    } catch (err: any) {
+      console.error('Failed to create non-apprenant', err);
+      setError('Erreur serveur: ' + (err.message || 'Serveur injoignable'));
     }
-
-    // Persist
-    db.saveClients([...db.getClients(), newClient]);
-    db.saveNonApprenants([...db.getNonApprenants(), newNa]);
-    if (newFn) db.saveFinancements([...db.getFinancements(), newFn]);
-    
-    // Transactions for fees
-    const txs = db.getTransactions();
-    const txAdh: Transaction = {
-      id: 'tx_adh_na_' + Date.now(), clientId, clientName: fullName,
-      type: 'adhesion', amount: ADHESION_NON_APPRENANT, date: now,
-      collectedBy: currentUser.id, collectedByName: currentUser.name,
-      validatedBy: currentUser.id, validatedByName: currentUser.name,
-      status: 'approved', notes: 'Adhésion Non-Apprenant non remboursable'
-    };
-    const txCar: Transaction = {
-      id: 'tx_car_na_' + Date.now(), clientId, clientName: fullName,
-      type: 'carnet', amount: CARNET_MONTANT, date: now,
-      collectedBy: currentUser.id, collectedByName: currentUser.name,
-      validatedBy: currentUser.id, validatedByName: currentUser.name,
-      status: 'approved', notes: 'Carnet de cotisation'
-    };
-    db.saveTransactions([...txs, txAdh, txCar]);
-
-    // Directive 17.7 — Crediting cash via Produits (adhésion uniquement à la création)
-    const produits = db.getProduits();
-    db.saveProduits([
-      ...produits,
-      { id: 'p_adh_' + Date.now(), category: 'Frais de dossiers', amount: ADHESION_NON_APPRENANT, description: `Adhésion non-apprenant ${fullName}`, date: now, recordedBy: currentUser.id, recordedByName: currentUser.name },
-      { id: 'p_car_' + Date.now(), category: 'Vente de livret individuel', amount: CARNET_MONTANT, description: `Livret cotisation ${fullName}`, date: now, recordedBy: currentUser.id, recordedByName: currentUser.name },
-    ]);
-
-    db.addLog(currentUser.id, currentUser.name, currentUser.role, 'Inscription Non-Apprenant',
-      `Non-Apprenant ${fullName} inscrit. Frais: 6000 F. ${wantFinancement ? 'Financement ' + bienFinance + ' ajouté.' : ''}`
-    );
-
-    setNonApprenants(db.getNonApprenants());
-    confetti({ particleCount: 100, spread: 70 });
-    setReceiptData({ na: newNa, fn: newFn });
-    resetWizard();
   };
 
   const filtered = nonApprenants.filter(na => na.fullName.toLowerCase().includes(search.toLowerCase()) || na.phone.includes(search));

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, Client, Transaction } from '../types';
 import { db } from '../localStorageDB';
+import api from '../config/api';
 import { getCycleInfoByCaseIndex } from '../cotisationCycle';
 import { 
   ArrowUpRight, 
@@ -22,8 +23,32 @@ interface CommercialDashboardProps {
 const fmt = (v: number) => new Intl.NumberFormat('fr-FR').format(Math.round(v)) + ' F';
 
 export default function CommercialDashboard({ currentUser }: CommercialDashboardProps) {
-  const [clients] = useState<Client[]>(db.getClients().filter(c => c.assignedCommercialId === currentUser.id));
+  const [clients, setClients] = useState<Client[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>(db.getTransactions());
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Fetch and synchronize commercial data - Initial fetch + polling (3s)
+  useEffect(() => {
+    const fetchCommercialData = async () => {
+      try {
+        const apiClients = await api.getMyClients();
+        db.syncDataFromServer(apiClients);
+        setClients(apiClients);
+      } catch (err) {
+        console.error("Error fetching commercial clients", err);
+      }
+    };
+    
+    // Initial fetch
+    fetchCommercialData();
+    
+    // Poll every 3 seconds to sync with new clients created by caissier
+    const interval = setInterval(() => {
+      fetchCommercialData();
+    }, 3000);
+    
+    return () => clearInterval(interval);
+  }, [currentUser.id]);
 
   // Form states
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -577,7 +602,13 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-600">
-              {filteredClients.length === 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-6 text-slate-400">
+                    Chargement des clients...
+                  </td>
+                </tr>
+              ) : filteredClients.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="text-center py-6 text-slate-400">
                     Aucun client sous votre gestion.
