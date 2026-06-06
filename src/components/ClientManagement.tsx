@@ -6,7 +6,7 @@ import { calculerGrille, calculerGrilleNonApprenant } from '../grille';
 import {
   UserPlus, Search, GraduationCap, UserCheck, Briefcase,
   History, ArrowRightLeft, X, Pencil, Eye, Lock, PiggyBank, HandCoins, ArrowRight, Printer, FileSpreadsheet,
-  Loader2, CheckCircle2, AlertTriangle, Upload
+  Loader2, CheckCircle2, AlertTriangle, Upload, Trash2
 } from 'lucide-react';
 import { requestAdminCode, validateAndConsumeAdminCode } from '../adminCodes';
 import JSONImportDialog from './JSONImportDialog';
@@ -74,6 +74,13 @@ export default function ClientManagement({ currentUser }: Props) {
   const [editError, setEditError] = useState('');
   const [editRequestId, setEditRequestId] = useState('');
 
+  // Delete
+  const [deleteClient, setDeleteClient] = useState<Client | null>(null);
+  const [deleteCode, setDeleteCode] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deleteRequestId, setDeleteRequestId] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // Migration
   const [migrateClient, setMigrateClient] = useState<Client | null>(null);
   const [newSchoolName, setNewSchoolName] = useState('');
@@ -110,9 +117,11 @@ export default function ClientManagement({ currentUser }: Props) {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Nom, téléphone et commercial : plus obligatoires pour le moment (Directive utilisateur)
-    // if (!name || !phone || !assignedCommercialId) { setMsg({ text: 'Nom, téléphone et commercial obligatoires.', type: 'error' }); return; }
-    
+    if (!assignedCommercialId) {
+      setMsg({ text: 'Veuillez sélectionner un commercial à assigner au client.', type: 'error' });
+      return;
+    }
+
     if (type === 'apprenant') {
       // Les infos parents sont optionnelles pour le moment (Directive utilisateur)
       /*
@@ -255,6 +264,48 @@ export default function ClientManagement({ currentUser }: Props) {
     db.addLog(currentUser.id, currentUser.name, currentUser.role, 'Modification Client', `Client ${editClient.id} modifié. Avant: ${before}. Après: ${after}. Code: ${editCode}`);
     setEditClient(null);
     setMsg({ text: 'Client modifié avec succès (traçabilité complète).', type: 'success' });
+  };
+
+  const openDelete = (c: Client) => {
+    const request = requestAdminCode({
+      requestedBy: currentUser,
+      actionType: 'client_delete',
+      targetId: c.id,
+      targetLabel: `Client ${c.name}`,
+      reason: 'Suppression fiche client',
+    });
+    setDeleteClient(c);
+    setDeleteCode('');
+    setDeleteRequestId(request.id);
+    setDeleteError('');
+  };
+
+  const handleDelete = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!deleteClient) return;
+
+    const validation = validateAndConsumeAdminCode({
+      code: deleteCode,
+      actionType: 'client_delete',
+      targetId: deleteClient.id,
+      usedBy: currentUser,
+    });
+    if (!validation.ok) { setDeleteError(validation.message || 'Code invalide.'); return; }
+
+    setIsDeleting(true);
+    try {
+      await api.deleteClient(deleteClient.id);
+      const upd = clients.filter(c => c.id !== deleteClient.id);
+      db.saveClients(upd);
+      setClients(upd);
+      db.addLog(currentUser.id, currentUser.name, currentUser.role, 'Suppression Client', `Client ${deleteClient.name} (${deleteClient.id}) supprimé. Code: ${deleteCode}`);
+      setDeleteClient(null);
+      setMsg({ text: `Client ${deleteClient.name} supprimé avec succès (et toutes ses données).`, type: 'success' });
+    } catch (err: any) {
+      setDeleteError(err.message || 'Erreur lors de la suppression.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleMigration = (e: React.FormEvent) => {
@@ -547,6 +598,10 @@ export default function ClientManagement({ currentUser }: Props) {
             <form className="space-y-5 relative" onSubmit={async (e) => {
               e.preventDefault();
               if (isEpargnantLoading) return;
+              if (!assignedCommercialId) {
+                alert('Veuillez sélectionner un commercial à assigner.');
+                return;
+              }
               setIsEpargnantLoading(true);
               try {
                 const client = await api.createClient({
@@ -554,7 +609,7 @@ export default function ClientManagement({ currentUser }: Props) {
                   type: 'simple',
                   phone: phone || "0000",
                   address: address || "",
-                  assignedCommercialId: assignedCommercialId || currentUser.id
+                  assignedCommercialId
                 });
                 setClients(prev => [client, ...prev]);
                 setShowEpargnantForm(false);
@@ -742,6 +797,7 @@ export default function ClientManagement({ currentUser }: Props) {
                       <div className="flex gap-1.5">
                         <button onClick={() => setViewClient(c)} title="Consulter" className="p-1.5 rounded-lg bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 border border-slate-200"><Eye className="w-3.5 h-3.5" /></button>
                         {isCashier && <button onClick={() => openEdit(c)} title="Modifier (code admin)" className="p-1.5 rounded-lg bg-slate-100 hover:bg-amber-50 text-slate-600 hover:text-amber-600 border border-slate-200"><Pencil className="w-3.5 h-3.5" /></button>}
+                        {isAdmin && <button onClick={() => openDelete(c)} title="Supprimer (code admin)" className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200"><Trash2 className="w-3.5 h-3.5" /></button>}
                         {isCashier && c.type === 'apprenant' && <button onClick={() => setMigrateClient(c)} title="Changer établissement" className="p-1.5 rounded-lg bg-slate-100 hover:bg-purple-50 text-slate-600 hover:text-purple-600 border border-slate-200"><ArrowRightLeft className="w-3.5 h-3.5" /></button>}
                         {schoolDebts.length > 0 && <button onClick={() => { const h = schoolDebts.map(d => `${d.schoolName}: ${d.paidAmount}/${d.debtAmount} F (${d.active ? 'Actif' : 'Ancien'})`).join('\n'); alert(`Historique Scolarité — ${c.name}\n\n${h}`); }} title="Historique dettes" className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200"><History className="w-3.5 h-3.5" /></button>}
                       </div>
@@ -774,6 +830,35 @@ export default function ClientManagement({ currentUser }: Props) {
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setEditClient(null)} className="px-4 py-2 border border-slate-200 text-slate-600 text-sm rounded-xl hover:bg-slate-50">Annuler</button>
                 <button type="submit" className="px-4 py-2 bg-amber-600 text-white text-sm font-semibold rounded-xl hover:bg-amber-700">Valider la modification</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Modal */}
+      {deleteClient && (
+        <div className="fixed inset-0 bg-slate-950/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-rose-900 text-white">
+              <h3 className="font-semibold flex items-center gap-2"><Lock className="w-4 h-4" /> Suppression sécurisée — Code Admin requis</h3>
+              <button onClick={() => setDeleteClient(null)} className="p-1 hover:bg-rose-800 rounded-full"><X className="w-4 h-4" /></button>
+            </div>
+            <form onSubmit={handleDelete} className="p-5 space-y-4">
+              {deleteError && <div className="p-3 text-sm rounded-xl bg-red-50 text-red-600 border border-red-200">{deleteError}</div>}
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800">
+                <strong>⚠️ ATTENTION :</strong> Vous êtes sur le point de supprimer définitivement le client <strong>{deleteClient.name}</strong> et toutes ses données associées (comptes, transactions, dettes, etc.). Cette action est irréversible.
+              </div>
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700">
+                <strong>Sécurité :</strong> Demande envoyée à l'admin. Référence: <span className="font-mono">{deleteRequestId}</span>. Le code généré est valable 10 minutes et utilisable une seule fois.
+              </div>
+              <label className="block space-y-1"><span className="text-xs font-semibold text-slate-500">Code Admin *</span><input type="text" required className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500 font-mono" value={deleteCode} onChange={(e) => setDeleteCode(e.target.value.toUpperCase())} placeholder="ADM-ABC123" /></label>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setDeleteClient(null)} className="px-4 py-2 border border-slate-200 text-slate-600 text-sm rounded-xl hover:bg-slate-50">Annuler</button>
+                <button type="submit" disabled={isDeleting} className="px-4 py-2 bg-rose-600 text-white text-sm font-semibold rounded-xl hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                  {isDeleting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Confirmer la suppression
+                </button>
               </div>
             </form>
           </div>

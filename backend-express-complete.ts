@@ -358,9 +358,33 @@ app.post('/api/clients', authenticateToken, requireRole('admin', 'commercial', '
       return res.status(400).json({ error: 'Invalid phone format' })
     }
 
-    // Créer le client avec codes auto-générés
-    // Admin utilise son propre ID si aucun commercial spécifié
-    const assignedCommercialId = req.body.assignedCommercialId || req.body.commercialId || req.user!.userId
+    // Le commercial assigné doit OBLIGATOIREMENT être un commercial valide.
+    // Si l'utilisateur connecté est lui-même commercial, il peut s'auto-assigner.
+    let assignedCommercialId = req.body.assignedCommercialId || req.body.commercialId
+
+    if (!assignedCommercialId) {
+      // Fallback: si l'utilisateur est commercial, il s'auto-assigne. Sinon erreur.
+      if (req.user!.role === 'commercial') {
+        assignedCommercialId = req.user!.userId
+      } else {
+        return res.status(400).json({ 
+          error: 'assignedCommercialId est obligatoire. Sélectionnez un commercial à assigner au client.' 
+        })
+      }
+    }
+
+    // Vérifier que le commercial assigné existe et a le bon rôle
+    const assignedCommercial = await prisma.user.findUnique({
+      where: { id: assignedCommercialId }
+    })
+    if (!assignedCommercial) {
+      return res.status(400).json({ error: 'Commercial assigné introuvable' })
+    }
+    if (assignedCommercial.role !== 'commercial') {
+      return res.status(400).json({ 
+        error: `L'utilisateur "${assignedCommercial.name}" n'est pas un commercial (rôle: ${assignedCommercial.role}). Veuillez sélectionner un commercial valide.` 
+      })
+    }
 
     const client = await createClientWithCodes({
       name,
@@ -527,6 +551,109 @@ app.delete('/api/admin/wipe-clients', authenticateToken, requireRole('admin'), a
 })
 
 /**
+ * PATCH /api/clients/:clientId/reassign
+ * Réassigne un client à un autre commercial
+ * Rôles: admin, caissier
+ */
+app.patch('/api/clients/:clientId/reassign', authenticateToken, requireRole('admin', 'caissier'), async (req: Request, res: Response) => {
+  try {
+    const { clientId } = req.params
+    const { assignedCommercialId } = req.body
+
+    if (!assignedCommercialId) {
+      return res.status(400).json({ error: 'assignedCommercialId est obligatoire' })
+    }
+
+    const commercial = await prisma.user.findUnique({ where: { id: assignedCommercialId } })
+    if (!commercial || commercial.role !== 'commercial') {
+      return res.status(400).json({ error: 'Utilisateur cible n\'est pas un commercial valide' })
+    }
+
+    const client = await prisma.client.update({
+      where: { id: clientId },
+      data: { assignedCommercialId }
+    })
+
+    res.json({ message: `Client ${client.name} réassigné à ${commercial.name}`, client })
+  } catch (error: any) {
+    console.error('[REASSIGN CLIENT ERROR]', error)
+    res.status(500).json({ error: 'Failed to reassign client', message: error.message })
+  }
+})
+
+/**
+ * POST /api/admin/bulk-reassign-clients
+ * Réassigne tous les clients d'un utilisateur (ex: caissier) à un commercial
+ * Rôles: admin uniquement
+ */
+app.post('/api/admin/bulk-reassign-clients', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const { fromUserId, toCommercialId } = req.body
+
+    if (!fromUserId || !toCommercialId) {
+      return res.status(400).json({ error: 'fromUserId et toCommercialId sont obligatoires' })
+    }
+
+    const commercial = await prisma.user.findUnique({ where: { id: toCommercialId } })
+    if (!commercial || commercial.role !== 'commercial') {
+      return res.status(400).json({ error: 'toCommercialId doit être un commercial valide' })
+    }
+
+    const result = await prisma.client.updateMany({
+      where: { assignedCommercialId: fromUserId },
+      data: { assignedCommercialId: toCommercialId }
+    })
+
+    res.json({ 
+      message: `${result.count} clients réassignés de ${fromUserId} vers ${commercial.name}`,
+      count: result.count
+    })
+  } catch (error: any) {
+    console.error('[BULK REASSIGN ERROR]', error)
+    res.status(500).json({ error: 'Bulk reassign failed', message: error.message })
+  }
+})
+
+/**
+ * GET /api/clients/me
+ * Récupère les clients assignés au commercial connecté
+ * ATTENTION: Doit être déclaré AVANT /api/clients/:clientId pour éviter conflit de routage
+ */
+app.get('/api/clients/me', authenticateToken, requireRole('commercial', 'admin'), async (req: Request, res: Response) => {
+  try {
+    // Si admin, retourner tous les clients. Sinon filtrer par commercial connecté.
+    const whereClause = req.user!.role === 'admin' 
+      ? {} 
+      : { assignedCommercialId: req.user!.userId };
+
+    const clients = await prisma.client.findMany({
+      where: whereClause,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        accounts: true,
+        schoolDebts: true,
+        apprenant: {
+          include: {
+            tontineAccounts: true,
+            guardian: true,
+            caution: true
+          }
+        },
+        nonApprenant: {
+          include: {
+            financements: true
+          }
+        },
+      }
+    })
+    res.json(clients)
+  } catch (error) {
+    console.error('Fetch my clients error:', error)
+    res.status(500).json({ error: 'Failed to fetch my clients' })
+  }
+})
+
+/**
  * GET /api/clients/:clientId
  * Récupère les détails d'un client
  */
@@ -596,42 +723,61 @@ app.get('/api/clients', authenticateToken, async (req: Request, res: Response) =
 })
 
 /**
- * GET /api/clients/me
- * Récupère les clients assignés au commercial connecté
- * Utilisé pour la synchronisation temps réel du CommercialDashboard
+ * DELETE /api/clients/:clientId
+ * Supprime un client et toutes ses données associées
+ * Rôles: admin uniquement
  */
-app.get('/api/clients/me', authenticateToken, requireRole('commercial', 'admin'), async (req: Request, res: Response) => {
+app.delete('/api/clients/:clientId', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
   try {
-    // Si l'utilisateur est admin, retourner tous les clients
-    // Sinon, retourner seulement les clients assignés au commercial
-    const whereClause = req.user!.role === 'admin' 
-      ? {} 
-      : { assignedCommercialId: req.user!.userId };
+    const clientId = req.params.clientId
 
-    const clients = await prisma.client.findMany({
-      where: whereClause,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        accounts: true,
-        schoolDebts: true,
-        apprenant: {
-          include: {
-            tontineAccounts: true,
-            guardian: true,
-            caution: true
-          }
-        },
-        nonApprenant: {
-          include: {
-            financements: true
-          }
-        },
-      }
+    // Vérifier que le client existe
+    const clientExists = await prisma.client.findUnique({
+      where: { id: clientId }
     })
-    res.json(clients)
-  } catch (error) {
-    console.error('Fetch my clients error:', error)
-    res.status(500).json({ error: 'Failed to fetch my clients' })
+
+    if (!clientExists) {
+      return res.status(404).json({ error: 'Client not found' })
+    }
+
+    // Supprimer dans l'ordre inverse des dépendances
+    await prisma.$transaction([
+      prisma.cotisation.deleteMany({
+        where: {
+          tontineAccount: {
+            apprenant: {
+              clientId: clientId
+            }
+          }
+        }
+      }),
+      prisma.transaction.deleteMany({ where: { clientId } }),
+      prisma.insuranceTransaction.deleteMany({ where: { clientId } }),
+      prisma.schoolDebt.deleteMany({ where: { clientId } }),
+      prisma.tontineAccount.deleteMany({
+        where: {
+          apprenant: {
+            clientId: clientId
+          }
+        }
+      }),
+      prisma.financementNonApprenant.deleteMany({
+        where: {
+          nonApprenant: {
+            clientId: clientId
+          }
+        }
+      }),
+      prisma.apprenant.deleteMany({ where: { clientId } }),
+      prisma.nonApprenant.deleteMany({ where: { clientId } }),
+      prisma.account.deleteMany({ where: { clientId } }),
+      prisma.client.delete({ where: { id: clientId } }),
+    ])
+
+    res.json({ message: `Client ${clientExists.name} et toutes ses données ont été supprimés avec succès.` })
+  } catch (error: any) {
+    console.error('[DELETE CLIENT ERROR]', error)
+    res.status(500).json({ error: 'Failed to delete client', message: error.message })
   }
 })
 

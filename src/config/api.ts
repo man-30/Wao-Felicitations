@@ -86,6 +86,26 @@ export const api = {
   async getClient(id: string) {
     return this.request<any>(`/api/clients/${id}`);
   },
+
+  async deleteClient(id: string) {
+    return this.request<any>(`/api/clients/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async reassignClient(clientId: string, assignedCommercialId: string) {
+    return this.request<any>(`/api/clients/${clientId}/reassign`, {
+      method: 'PATCH',
+      body: JSON.stringify({ assignedCommercialId }),
+    });
+  },
+
+  async bulkReassignClients(fromUserId: string, toCommercialId: string) {
+    return this.request<any>('/api/admin/bulk-reassign-clients', {
+      method: 'POST',
+      body: JSON.stringify({ fromUserId, toCommercialId }),
+    });
+  },
   
   async wipeClients() {
     return this.request<any>('/api/admin/wipe-clients', { method: 'DELETE' });
