@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Account, Client, ClientType, User, SchoolDebt, DureeFinancement, FinancementNonApprenant } from '../types';
 import { db } from '../localStorageDB';
 import api from '../config/api';
@@ -41,11 +41,11 @@ export default function ClientManagement({ currentUser }: Props) {
     fetchClients();
   }, []);
 
-  // Polling toutes les 30 secondes pour synchroniser les soldes automatiquement
+  // Polling toutes les 60 secondes (60s évite les re-rendus agressifs pendant le scroll)
   useEffect(() => {
     const interval = setInterval(() => {
       fetchClients();
-    }, 30000);
+    }, 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -131,13 +131,14 @@ export default function ClientManagement({ currentUser }: Props) {
   const isAdmin = currentUser.role === 'admin';
   const isCashier = currentUser.role === 'caissier';
 
-  const filteredClients = clients.filter(c => {
+  // ── Liste filtrée mémoisée (ne recalcule que si clients, searchTerm ou rôle changent) ──
+  const filteredClients = useMemo(() => clients.filter(c => {
     if (!c) return false;
     if (currentUser.role === 'commercial' && c.assignedCommercialId !== currentUser.id) return false;
     const name = c.name || '';
     const phone = c.phone || '';
     return name.toLowerCase().includes(searchTerm.toLowerCase()) || phone.includes(searchTerm);
-  });
+  }), [clients, searchTerm, currentUser.role, currentUser.id]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -419,12 +420,38 @@ export default function ClientManagement({ currentUser }: Props) {
     return <span className="px-2 py-1 text-xs font-semibold rounded bg-teal-100 text-teal-700 flex items-center gap-1"><UserCheck className="w-3 h-3" /> Épargnant</span>;
   };
 
-  const commName = (id: string) => commercials.find(u => u.id === id)?.name || id;
+  // ── Maps O(1) pour éviter accounts.find() × nombre_de_clients dans le rendu ─────────────
+  const savingsAccountMap = useMemo(() => {
+    const map: Record<string, Account | undefined> = {};
+    accounts.forEach(a => {
+      if (a.type === 'epargne' && a.status !== 'ferme') map[a.clientId] = a;
+    });
+    return map;
+  }, [accounts]);
 
-  const transactions = db.getTransactions();
+  const financingAccountsMap = useMemo(() => {
+    const map: Record<string, Account[]> = {};
+    accounts.forEach(a => {
+      if (a.type === 'financement') {
+        (map[a.clientId] = map[a.clientId] || []).push(a);
+      }
+    });
+    return map;
+  }, [accounts]);
 
-  const getSavingsAccount = (clientId: string) => accounts.find(a => a.clientId === clientId && a.type === 'epargne' && a.status !== 'ferme');
-  const getFinancingAccounts = (clientId: string) => accounts.filter(a => a.clientId === clientId && a.type === 'financement');
+  const commercialsMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    commercials.forEach(u => { map[u.id] = u.name; });
+    return map;
+  }, [commercials]);
+
+  const commName = (id: string) => commercialsMap[id] || id;
+
+  // Transactions mémoisées (ne relit localStorage que si la liste clients change)
+  const transactions = useMemo(() => db.getTransactions(), [clients]);
+
+  const getSavingsAccount = (clientId: string) => savingsAccountMap[clientId];
+  const getFinancingAccounts = (clientId: string) => financingAccountsMap[clientId] || [];
 
   const handleCreateSavingsAccount = () => {
     if (!savingClient) return;
@@ -894,19 +921,15 @@ export default function ClientManagement({ currentUser }: Props) {
                         {isCashier && <button onClick={() => openEdit(c)} title="Modifier (code admin)" className="p-1.5 rounded-lg bg-slate-100 hover:bg-amber-50 text-slate-600 hover:text-amber-600 border border-slate-200"><Pencil className="w-3.5 h-3.5" /></button>}
                         {isAdmin && <button onClick={() => openDelete(c)} title="Supprimer (code admin)" className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200"><Trash2 className="w-3.5 h-3.5" /></button>}
                         {isCashier && c.type === 'apprenant' && <button onClick={() => setMigrateClient(c)} title="Changer établissement" className="p-1.5 rounded-lg bg-slate-100 hover:bg-purple-50 text-slate-600 hover:text-purple-600 border border-slate-200"><ArrowRightLeft className="w-3.5 h-3.5" /></button>}
-                        {(isCashier || isAdmin) && (c.type === 'simple' || (c.type as string) === 'simple') && (() => {
-                          const epargneAcc = accounts.find(a => a.clientId === c.id && a.type === 'epargne' && a.status !== 'ferme');
-                          const hasMise = epargneAcc && (epargneAcc.dailyContribution ?? 0) > 0;
-                          return (
-                            <button
-                              onClick={() => { setMiseClient(c); setMiseAmount(epargneAcc?.dailyContribution ?? 0); setMiseError(''); }}
-                              title={hasMise ? `Modifier la mise journalière (${epargneAcc?.dailyContribution?.toLocaleString()} F/j)` : 'Configurer la mise journalière (tontine)'}
-                              className={`p-1.5 rounded-lg border text-xs font-semibold ${hasMise ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-300' : 'bg-teal-100 text-teal-700 hover:bg-teal-200 border-teal-300'}`}
-                            >
-                              <PiggyBank className="w-3.5 h-3.5" />
-                            </button>
-                          );
-                        })()}
+                        {(isCashier || isAdmin) && (c.type === 'simple' || (c.type as string) === 'simple') && (
+                          <button
+                            onClick={() => { const acc = savingsAccountMap[c.id]; setMiseClient(c); setMiseAmount(acc?.dailyContribution ?? 0); setMiseError(''); }}
+                            title={(savingsAccountMap[c.id]?.dailyContribution ?? 0) > 0 ? `Modifier la mise journalière (${savingsAccountMap[c.id]?.dailyContribution?.toLocaleString()} F/j)` : 'Configurer la mise journalière (tontine)'}
+                            className={`p-1.5 rounded-lg border text-xs font-semibold ${ (savingsAccountMap[c.id]?.dailyContribution ?? 0) > 0 ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-300' : 'bg-teal-100 text-teal-700 hover:bg-teal-200 border-teal-300'}`}
+                          >
+                            <PiggyBank className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         {schoolDebts.length > 0 && <button onClick={() => { const h = schoolDebts.map(d => `${d.schoolName}: ${d.paidAmount}/${d.debtAmount} F (${d.active ? 'Actif' : 'Ancien'})`).join('\n'); alert(`Historique Scolarité — ${c.name}\n\n${h}`); }} title="Historique dettes" className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200"><History className="w-3.5 h-3.5" /></button>}
                       </div>
                     </td>
