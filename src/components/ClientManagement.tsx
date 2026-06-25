@@ -41,13 +41,30 @@ export default function ClientManagement({ currentUser }: Props) {
     fetchClients();
   }, []);
 
-  // Polling toutes les 60 secondes (60s évite les re-rendus agressifs pendant le scroll)
+  // ── Détection de scroll inactif: désactiver polling pendant le scroll ────────────────
+  const [isScrolling, setIsScrolling] = useState(false);
+
+  useEffect(() => {
+    let scrollTimeout: NodeJS.Timeout;
+    const handleScroll = () => {
+      setIsScrolling(true);
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => setIsScrolling(false), 1500);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      clearTimeout(scrollTimeout);
+    };
+  }, []);
+
+  // Modifier le polling: ne mettre à jour que si NOT scrolling
   useEffect(() => {
     const interval = setInterval(() => {
-      fetchClients();
+      if (!isScrolling) fetchClients();
     }, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isScrolling]);
 
   // Create
   const [name, setName] = useState('');
@@ -447,8 +464,8 @@ export default function ClientManagement({ currentUser }: Props) {
 
   const commName = (id: string) => commercialsMap[id] || id;
 
-  // Transactions mémoisées (ne relit localStorage que si la liste clients change)
-  const transactions = useMemo(() => db.getTransactions(), [clients]);
+  // Transactions mémoisées: charger UNE SEULE FOIS au mount (ne pas recharger à chaque client change)
+  const transactions = useMemo(() => db.getTransactions(), []);
 
   const getSavingsAccount = (clientId: string) => savingsAccountMap[clientId];
   const getFinancingAccounts = (clientId: string) => financingAccountsMap[clientId] || [];

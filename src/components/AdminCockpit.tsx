@@ -681,19 +681,23 @@ export default function AdminCockpit({ currentUser }: AdminCockpitProps) {
               <p className="text-sm text-slate-500">Dépôts, retraits et charges dans la période sélectionnée.</p>
             </div>
           </div>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <ReLineChart data={dailySeries} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="date" tickLine={false} axisLine={false} fontSize={12} />
-                <YAxis tickLine={false} axisLine={false} fontSize={12} />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="deposits" name="Dépôts" stroke="#22c55e" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="withdrawals" name="Retraits" stroke="#ef4444" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="charges" name="Charges" stroke="#f59e0b" strokeWidth={2} dot={false} />
-              </ReLineChart>
-            </ResponsiveContainer>
+          <div className="h-72 min-h-72 min-w-0">
+            {dailySeries && dailySeries.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <ReLineChart data={dailySeries} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="date" tickLine={false} axisLine={false} fontSize={12} />
+                  <YAxis tickLine={false} axisLine={false} fontSize={12} />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="deposits" name="Dépôts" stroke="#22c55e" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="withdrawals" name="Retraits" stroke="#ef4444" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="charges" name="Charges" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                </ReLineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-slate-400 text-sm">Aucune donnée disponible</div>
+            )}
           </div>
         </div>
 
@@ -718,17 +722,21 @@ export default function AdminCockpit({ currentUser }: AdminCockpitProps) {
                 <p className="mt-1 text-lg font-semibold text-slate-900">{clientStats.inactive}</p>
               </div>
             </div>
-            <div className="mt-4 h-40">
-              <ResponsiveContainer width="100%" height="100%">
-                <RePieChart>
-                  <Pie data={clientTypeData} dataKey="value" nameKey="name" innerRadius={42} outerRadius={64} paddingAngle={4}>
-                    {clientTypeData.map((entry, index) => (
-                      <Cell key={entry.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </RePieChart>
-              </ResponsiveContainer>
+            <div className="mt-4 h-40 min-h-40 min-w-0">
+              {clientTypeData && clientTypeData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <RePieChart>
+                    <Pie data={clientTypeData} dataKey="value" nameKey="name" innerRadius={42} outerRadius={64} paddingAngle={4}>
+                      {clientTypeData.map((entry, index) => (
+                        <Cell key={entry.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </RePieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full text-slate-400 text-sm">Aucune donnée</div>
+              )}
             </div>
           </div>
 

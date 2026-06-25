@@ -166,15 +166,19 @@ export default function AdminDashboard({ currentUser }: AdminDashboardProps) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 lg:col-span-2">
           <h3 className="text-base font-semibold text-slate-800 mb-4">Flux Financiers</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <XAxis dataKey="name" stroke="#888888" fontSize={12} />
-                <YAxis stroke="#888888" fontSize={12} />
-                <Tooltip />
-                <Bar dataKey="montant" fill="#4f46e5" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="h-64 min-h-64 min-w-0">
+            {chartData && chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData}>
+                  <XAxis dataKey="name" stroke="#888888" fontSize={12} />
+                  <YAxis stroke="#888888" fontSize={12} />
+                  <Tooltip />
+                  <Bar dataKey="montant" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-slate-400 text-sm">Aucune donnée disponible</div>
+            )}
           </div>
         </div>
 
