@@ -663,75 +663,167 @@ app.delete('/api/admin/wipe-clients', authenticateToken, requireRole('admin'), a
 })
 
 /**
- * DELETE /api/admin/clients-by-zone
- * Supprime tous les clients assignés à des commerciaux d'une zone donnée
- * Rôles: admin uniquement
- * Body: { zone: string } — ex: { "zone": "caissier 1" }
+ * Utilitaire : normalise une zone (supprime espaces, minuscule)
+ * Permet de matcher "caissier 1" == "caissier1" == "Caissier1"
+ */
+const normalizeZone = (s: string) => s.replace(/\s+/g, '').toLowerCase()
+
+/**
+ * Construit le filtre Prisma à partir des critères de suppression en masse
+ */
+async function buildBulkClientFilter(filters: {
+  zone?: string
+  commercialId?: string
+  type?: string
+  dateFrom?: string
+  dateTo?: string
+  clientIds?: string[]
+}) {
+  const where: any = {}
+
+  // Filtre par zone → trouver les commerciaux correspondants
+  if (filters.zone) {
+    const allCommercials = await prisma.user.findMany({ where: { role: 'commercial' }, select: { id: true, zone: true } })
+    const matchedIds = allCommercials
+      .filter(c => c.zone && normalizeZone(c.zone) === normalizeZone(filters.zone!))
+      .map(c => c.id)
+    if (matchedIds.length === 0) return null // aucun commercial pour cette zone
+    where.assignedCommercialId = where.assignedCommercialId
+      ? { in: (where.assignedCommercialId.in || []).filter((id: string) => matchedIds.includes(id)) }
+      : { in: matchedIds }
+  }
+
+  // Filtre par commercial spécifique
+  if (filters.commercialId) {
+    where.assignedCommercialId = { in: [filters.commercialId] }
+  }
+
+  // Filtre par type
+  if (filters.type) {
+    where.type = filters.type === 'non-apprenant' ? 'non_apprenant' : filters.type
+  }
+
+  // Filtre par date d'inscription
+  if (filters.dateFrom || filters.dateTo) {
+    where.createdAt = {}
+    if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom)
+    if (filters.dateTo) {
+      const d = new Date(filters.dateTo)
+      d.setHours(23, 59, 59, 999)
+      where.createdAt.lte = d
+    }
+  }
+
+  // Filtre par IDs spécifiques
+  if (filters.clientIds && filters.clientIds.length > 0) {
+    where.id = { in: filters.clientIds }
+  }
+
+  return where
+}
+
+/**
+ * DELETE /api/admin/clients-by-zone (conservé pour compatibilité ascendante)
+ * Utilise la nouvelle logique normalisée
  */
 app.delete('/api/admin/clients-by-zone', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
   try {
     const zone = req.body.zone || req.query.zone as string
-    if (!zone) {
-      return res.status(400).json({ error: 'Le champ "zone" est obligatoire.' })
-    }
+    if (!zone) return res.status(400).json({ error: 'Le champ "zone" est obligatoire.' })
 
-    console.log(`[DELETE-BY-ZONE] Zone: "${zone}" — demandé par ${req.user!.email}`)
+    const where = await buildBulkClientFilter({ zone })
+    if (!where) return res.status(404).json({ error: `Aucun commercial trouvé pour la zone "${zone}".` })
 
-    // Trouver tous les commerciaux de cette zone
-    const commercials = await prisma.user.findMany({
-      where: { zone: { equals: zone, mode: 'insensitive' }, role: 'commercial' },
-      select: { id: true, name: true },
-    })
-
-    if (commercials.length === 0) {
-      return res.status(404).json({ error: `Aucun commercial trouvé pour la zone "${zone}".` })
-    }
-
-    const commercialIds = commercials.map(c => c.id)
-
-    // Trouver tous les clients de ces commerciaux
-    const clients = await prisma.client.findMany({
-      where: { assignedCommercialId: { in: commercialIds } },
-      select: { id: true, name: true },
-    })
-
-    if (clients.length === 0) {
-      return res.json({ deleted: 0, message: `Aucun client trouvé pour la zone "${zone}".` })
-    }
+    const clients = await prisma.client.findMany({ where, select: { id: true, name: true } })
+    if (clients.length === 0) return res.json({ deleted: 0, message: `Aucun client trouvé pour la zone "${zone}".` })
 
     const clientIds = clients.map(c => c.id)
-
-    // Supprimer dans l'ordre inverse des dépendances
     await prisma.$transaction([
-      prisma.cotisation.deleteMany({
-        where: { tontineAccount: { apprenant: { clientId: { in: clientIds } } } },
-      }),
+      prisma.cotisation.deleteMany({ where: { tontineAccount: { apprenant: { clientId: { in: clientIds } } } } }),
       prisma.transaction.deleteMany({ where: { clientId: { in: clientIds } } }),
       prisma.insuranceTransaction.deleteMany({ where: { clientId: { in: clientIds } } }),
       prisma.schoolDebt.deleteMany({ where: { clientId: { in: clientIds } } }),
-      prisma.tontineAccount.deleteMany({
-        where: { apprenant: { clientId: { in: clientIds } } },
-      }),
-      prisma.financementNonApprenant.deleteMany({
-        where: { nonApprenant: { clientId: { in: clientIds } } },
-      }),
+      prisma.tontineAccount.deleteMany({ where: { apprenant: { clientId: { in: clientIds } } } }),
+      prisma.financementNonApprenant.deleteMany({ where: { nonApprenant: { clientId: { in: clientIds } } } }),
+      prisma.apprenant.deleteMany({ where: { clientId: { in: clientIds } } }),
+      prisma.nonApprenant.deleteMany({ where: { clientId: { in: clientIds } } }),
+      prisma.account.deleteMany({ where: { clientId: { in: clientIds } } }),
+      prisma.client.deleteMany({ where: { id: { in: clientIds } } }),
+    ])
+    res.json({ deleted: clients.length, message: `${clients.length} client(s) supprimés pour la zone "${zone}".` })
+  } catch (error: any) {
+    res.status(500).json({ error: 'Suppression par zone échouée', message: error.message })
+  }
+})
+
+/**
+ * POST /api/admin/bulk-delete-preview
+ * Prévisualise les clients qui seront supprimés selon les filtres
+ * Rôles: admin uniquement
+ */
+app.post('/api/admin/bulk-delete-preview', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const filters = req.body
+    const where = await buildBulkClientFilter(filters)
+    if (!where) return res.json({ count: 0, clients: [], message: 'Aucun résultat pour ces critères.' })
+
+    const clients = await prisma.client.findMany({
+      where,
+      select: {
+        id: true, name: true, type: true, phone: true, createdAt: true,
+        commercial: { select: { name: true, zone: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    })
+
+    res.json({ count: clients.length, clients })
+  } catch (error: any) {
+    res.status(500).json({ error: 'Prévisualisation échouée', message: error.message })
+  }
+})
+
+/**
+ * DELETE /api/admin/bulk-delete-clients
+ * Supprime les clients selon des filtres multiples (zone, commercial, type, dates, IDs)
+ * Rôles: admin uniquement
+ */
+app.delete('/api/admin/bulk-delete-clients', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const filters = req.body
+    if (!filters || Object.keys(filters).length === 0) {
+      return res.status(400).json({ error: 'Au moins un filtre est obligatoire pour la suppression en masse.' })
+    }
+
+    const where = await buildBulkClientFilter(filters)
+    if (!where) return res.json({ deleted: 0, message: 'Aucun client à supprimer pour ces critères.' })
+
+    const clients = await prisma.client.findMany({ where, select: { id: true, name: true } })
+    if (clients.length === 0) return res.json({ deleted: 0, message: 'Aucun client correspondant.' })
+
+    const clientIds = clients.map(c => c.id)
+    console.log(`[BULK-DELETE] ${clientIds.length} clients — par ${req.user!.email}`)
+
+    await prisma.$transaction([
+      prisma.cotisation.deleteMany({ where: { tontineAccount: { apprenant: { clientId: { in: clientIds } } } } }),
+      prisma.transaction.deleteMany({ where: { clientId: { in: clientIds } } }),
+      prisma.insuranceTransaction.deleteMany({ where: { clientId: { in: clientIds } } }),
+      prisma.schoolDebt.deleteMany({ where: { clientId: { in: clientIds } } }),
+      prisma.tontineAccount.deleteMany({ where: { apprenant: { clientId: { in: clientIds } } } }),
+      prisma.financementNonApprenant.deleteMany({ where: { nonApprenant: { clientId: { in: clientIds } } } }),
       prisma.apprenant.deleteMany({ where: { clientId: { in: clientIds } } }),
       prisma.nonApprenant.deleteMany({ where: { clientId: { in: clientIds } } }),
       prisma.account.deleteMany({ where: { clientId: { in: clientIds } } }),
       prisma.client.deleteMany({ where: { id: { in: clientIds } } }),
     ])
 
-    console.log(`[DELETE-BY-ZONE] ${clients.length} clients supprimés pour la zone "${zone}"`)
-
     res.json({
       deleted: clients.length,
-      zone,
-      commercials: commercials.map(c => c.name),
-      message: `${clients.length} client(s) supprimés pour la zone "${zone}".`,
+      message: `${clients.length} client(s) supprimés avec succès.`,
     })
   } catch (error: any) {
-    console.error('[DELETE-BY-ZONE ERROR]', error)
-    res.status(500).json({ error: 'Suppression par zone échouée', message: error.message })
+    console.error('[BULK-DELETE ERROR]', error)
+    res.status(500).json({ error: 'Suppression en masse échouée', message: error.message })
   }
 })
 

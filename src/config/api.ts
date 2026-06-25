@@ -118,6 +118,34 @@ export const api = {
     });
   },
 
+  async bulkDeletePreview(filters: {
+    zone?: string;
+    commercialId?: string;
+    type?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    clientIds?: string[];
+  }) {
+    return this.request<{ count: number; clients: any[]; message?: string }>(
+      '/api/admin/bulk-delete-preview',
+      { method: 'POST', body: JSON.stringify(filters) }
+    );
+  },
+
+  async bulkDeleteClients(filters: {
+    zone?: string;
+    commercialId?: string;
+    type?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    clientIds?: string[];
+  }) {
+    return this.request<{ deleted: number; message: string }>(
+      '/api/admin/bulk-delete-clients',
+      { method: 'DELETE', body: JSON.stringify(filters) }
+    );
+  },
+
   async setMiseJournaliere(clientId: string, amount: number) {
     return this.request<any>(`/api/clients/${clientId}/mise-journaliere`, {
       method: 'PUT',

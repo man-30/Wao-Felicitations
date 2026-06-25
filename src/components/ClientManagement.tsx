@@ -119,10 +119,15 @@ export default function ClientManagement({ currentUser }: Props) {
   const [isMiseLoading, setIsMiseLoading] = useState(false);
   const [miseError, setMiseError] = useState('');
 
-  // ── Suppression par zone ──────────────────────────────────────────────────
-  const [showZoneDelete, setShowZoneDelete] = useState(false);
-  const [zoneToDelete, setZoneToDelete] = useState('caissier 1');
-  const [isZoneDeleting, setIsZoneDeleting] = useState(false);
+  // ── Suppression avancée (en masse) ──────────────────────────────────────────
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [bulkStep, setBulkStep] = useState<1 | 2>(1);
+  const [bulkFilters, setBulkFilters] = useState({ zone: '', commercialId: '', type: '', dateFrom: '', dateTo: '' });
+  const [bulkPreviewClients, setBulkPreviewClients] = useState<any[]>([]);
+  const [bulkPreviewCount, setBulkPreviewCount] = useState(0);
+  const [isBulkPreviewing, setIsBulkPreviewing] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [bulkError, setBulkError] = useState('');
   const isAdmin = currentUser.role === 'admin';
   const isCashier = currentUser.role === 'caissier';
 
@@ -366,21 +371,45 @@ export default function ClientManagement({ currentUser }: Props) {
     }
   };
 
-  // ── Handler: supprimer les clients d'une zone ─────────────────────────────
-  const handleZoneDelete = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!zoneToDelete.trim()) return;
-    setIsZoneDeleting(true);
+  // ── Handlers suppression avancée ────────────────────────────────────────────
+  const openBulkDelete = () => {
+    setShowBulkDelete(true);
+    setBulkStep(1);
+    setBulkFilters({ zone: '', commercialId: '', type: '', dateFrom: '', dateTo: '' });
+    setBulkPreviewClients([]);
+    setBulkPreviewCount(0);
+    setBulkError('');
+  };
+
+  const handleBulkPreview = async () => {
+    const hasFilter = bulkFilters.zone || bulkFilters.commercialId || bulkFilters.type || bulkFilters.dateFrom || bulkFilters.dateTo;
+    if (!hasFilter) { setBulkError('Veuillez sélectionner au moins un critère de filtre.'); return; }
+    setIsBulkPreviewing(true);
+    setBulkError('');
     try {
-      const result = await api.deleteClientsByZone(zoneToDelete.trim());
-      setMsg({ text: result.message || `Clients de la zone "${zoneToDelete}" supprimés.`, type: 'success' });
-      setShowZoneDelete(false);
+      const result = await api.bulkDeletePreview(bulkFilters);
+      setBulkPreviewClients(result.clients || []);
+      setBulkPreviewCount(result.count || 0);
+      setBulkStep(2);
+    } catch (err: any) {
+      setBulkError(err.message || 'Erreur lors de la prévisualisation.');
+    } finally {
+      setIsBulkPreviewing(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    setIsBulkDeleting(true);
+    setBulkError('');
+    try {
+      const result = await api.bulkDeleteClients(bulkFilters);
+      setMsg({ text: result.message || `${result.deleted} client(s) supprimés.`, type: 'success' });
+      setShowBulkDelete(false);
       fetchClients();
     } catch (err: any) {
-      setMsg({ text: err.message || 'Erreur lors de la suppression par zone.', type: 'error' });
-      setShowZoneDelete(false);
+      setBulkError(err.message || 'Erreur lors de la suppression.');
     } finally {
-      setIsZoneDeleting(false);
+      setIsBulkDeleting(false);
     }
   };
 
@@ -607,10 +636,10 @@ export default function ClientManagement({ currentUser }: Props) {
           )}
           {isAdmin && (
             <button
-              onClick={() => setShowZoneDelete(true)}
+              onClick={openBulkDelete}
               className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 shadow-lg shadow-rose-100 transition-all hover:scale-105 active:scale-95"
             >
-              <Trash2 className="h-4 w-4" /> Supprimer par zone
+              <Trash2 className="h-4 w-4" /> Suppression avancée
             </button>
           )}
           {isCashier && (
@@ -1505,41 +1534,199 @@ export default function ClientManagement({ currentUser }: Props) {
         </div>
       )}
 
-      {/* ── Modal : Supprimer clients par zone ───────────────────────────── */}
-      {showZoneDelete && (
-        <div className="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-rose-800 text-white">
-              <h3 className="font-semibold flex items-center gap-2"><Trash2 className="w-4 h-4" /> Suppression par zone</h3>
-              <button onClick={() => setShowZoneDelete(false)} className="p-1 hover:bg-rose-700 rounded-full"><X className="w-4 h-4" /></button>
+      {/* ── Modal : Suppression avancée (en masse) ───────────────────────── */}
+      {showBulkDelete && (() => {
+        // Zones uniques extraites des commerciaux chargés
+        const uniqueZones = Array.from(new Set(commercials.map(c => c.zone).filter(Boolean))) as string[];
+
+        return (
+          <div className="fixed inset-0 bg-slate-950/70 flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full my-6 overflow-hidden">
+
+              {/* Header */}
+              <div className="bg-rose-800 p-4 text-white flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-lg flex items-center gap-2"><Trash2 className="w-5 h-5" /> Suppression avancée de clients</h3>
+                  <p className="text-xs text-rose-200 mt-0.5">
+                    {bulkStep === 1 ? 'Étape 1 / 2 — Définir les critères de sélection' : `Étape 2 / 2 — Confirmation (${bulkPreviewCount} client${bulkPreviewCount > 1 ? 's' : ''} sélectionné${bulkPreviewCount > 1 ? 's' : ''})`}
+                  </p>
+                </div>
+                <button onClick={() => setShowBulkDelete(false)} className="p-1.5 hover:bg-rose-700 rounded-full"><X className="w-5 h-5" /></button>
+              </div>
+
+              {/* Barre de progression */}
+              <div className="h-1.5 bg-rose-100">
+                <div className="h-1.5 bg-rose-500 transition-all duration-300" style={{ width: bulkStep === 1 ? '50%' : '100%' }} />
+              </div>
+
+              {bulkStep === 1 && (
+                <div className="p-6 space-y-5">
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+                    <strong>⚠️ Action irréversible :</strong> Les clients correspondant aux critères ci-dessous seront supprimés définitivement avec toutes leurs données (comptes, transactions, dettes, cotisations).
+                  </div>
+
+                  {bulkError && <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">{bulkError}</div>}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Zone */}
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Filtrer par zone</span>
+                      <input
+                        list="zones-list"
+                        value={bulkFilters.zone}
+                        onChange={e => setBulkFilters(f => ({ ...f, zone: e.target.value }))}
+                        className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-rose-400 bg-slate-50"
+                        placeholder="Ex : caissier1, zone A…"
+                      />
+                      <datalist id="zones-list">
+                        {uniqueZones.map(z => <option key={z} value={z} />)}
+                      </datalist>
+                      {uniqueZones.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {uniqueZones.map(z => (
+                            <button key={z} type="button"
+                              onClick={() => setBulkFilters(f => ({ ...f, zone: f.zone === z ? '' : z }))}
+                              className={`px-2 py-0.5 rounded-full text-xs font-semibold border transition-colors ${bulkFilters.zone === z ? 'bg-rose-100 border-rose-400 text-rose-700' : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200'}`}
+                            >{z}</button>
+                          ))}
+                        </div>
+                      )}
+                    </label>
+
+                    {/* Commercial */}
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Filtrer par commercial</span>
+                      <select
+                        value={bulkFilters.commercialId}
+                        onChange={e => setBulkFilters(f => ({ ...f, commercialId: e.target.value }))}
+                        className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-rose-400 bg-slate-50 appearance-none"
+                      >
+                        <option value="">— Tous les commerciaux —</option>
+                        {commercials.map(c => (
+                          <option key={c.id} value={c.id}>{c.name} {c.zone ? `(${c.zone})` : ''}</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    {/* Type de client */}
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Filtrer par type</span>
+                      <select
+                        value={bulkFilters.type}
+                        onChange={e => setBulkFilters(f => ({ ...f, type: e.target.value }))}
+                        className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-rose-400 bg-slate-50 appearance-none"
+                      >
+                        <option value="">— Tous les types —</option>
+                        <option value="simple">Épargnants simples</option>
+                        <option value="apprenant">Apprenants</option>
+                        <option value="non-apprenant">Non-apprenants</option>
+                      </select>
+                    </label>
+
+                    {/* Date De */}
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Inscrit à partir du</span>
+                      <input
+                        type="date"
+                        value={bulkFilters.dateFrom}
+                        onChange={e => setBulkFilters(f => ({ ...f, dateFrom: e.target.value }))}
+                        className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-rose-400 bg-slate-50"
+                      />
+                    </label>
+
+                    {/* Date À */}
+                    <label className="block space-y-1.5 md:col-start-2">
+                      <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Jusqu'au</span>
+                      <input
+                        type="date"
+                        value={bulkFilters.dateTo}
+                        onChange={e => setBulkFilters(f => ({ ...f, dateTo: e.target.value }))}
+                        className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-rose-400 bg-slate-50"
+                      />
+                    </label>
+                  </div>
+
+                  {/* Résumé des filtres actifs */}
+                  {(bulkFilters.zone || bulkFilters.commercialId || bulkFilters.type || bulkFilters.dateFrom || bulkFilters.dateTo) && (
+                    <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs text-rose-800 space-y-1">
+                      <p className="font-bold">Critères actifs :</p>
+                      {bulkFilters.zone && <p>• Zone : <strong>{bulkFilters.zone}</strong></p>}
+                      {bulkFilters.commercialId && <p>• Commercial : <strong>{commercials.find(c => c.id === bulkFilters.commercialId)?.name}</strong></p>}
+                      {bulkFilters.type && <p>• Type : <strong>{bulkFilters.type}</strong></p>}
+                      {bulkFilters.dateFrom && <p>• Inscription depuis : <strong>{bulkFilters.dateFrom}</strong></p>}
+                      {bulkFilters.dateTo && <p>• Jusqu'au : <strong>{bulkFilters.dateTo}</strong></p>}
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-3 pt-2">
+                    <button type="button" onClick={() => setShowBulkDelete(false)} className="px-5 py-2.5 border border-slate-200 text-slate-600 text-sm rounded-xl hover:bg-slate-50">Annuler</button>
+                    <button
+                      type="button"
+                      onClick={handleBulkPreview}
+                      disabled={isBulkPreviewing || !(bulkFilters.zone || bulkFilters.commercialId || bulkFilters.type || bulkFilters.dateFrom || bulkFilters.dateTo)}
+                      className="px-5 py-2.5 bg-rose-600 text-white text-sm font-bold rounded-xl hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {isBulkPreviewing ? <><Loader2 className="w-4 h-4 animate-spin" /> Analyse…</> : <><Search className="w-4 h-4" /> Prévisualiser les clients</>}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {bulkStep === 2 && (
+                <div className="p-6 space-y-5">
+                  {bulkError && <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">{bulkError}</div>}
+
+                  {/* Compteur */}
+                  <div className={`rounded-2xl p-4 border-2 text-center ${bulkPreviewCount === 0 ? 'bg-slate-50 border-slate-200' : 'bg-rose-50 border-rose-300'}`}>
+                    <p className={`text-4xl font-black ${bulkPreviewCount === 0 ? 'text-slate-400' : 'text-rose-700'}`}>{bulkPreviewCount}</p>
+                    <p className={`text-sm font-semibold mt-1 ${bulkPreviewCount === 0 ? 'text-slate-500' : 'text-rose-600'}`}>
+                      {bulkPreviewCount === 0 ? 'Aucun client ne correspond à ces critères.' : `client${bulkPreviewCount > 1 ? 's' : ''} sera${bulkPreviewCount > 1 ? 'ont' : ''} supprimé${bulkPreviewCount > 1 ? 's' : ''} définitivement`}
+                    </p>
+                  </div>
+
+                  {/* Liste prévisualisation */}
+                  {bulkPreviewClients.length > 0 && (
+                    <div className="rounded-xl border border-slate-200 overflow-hidden max-h-64 overflow-y-auto">
+                      <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 text-xs font-bold text-slate-600 uppercase tracking-wider">
+                        Clients concernés {bulkPreviewClients.length < bulkPreviewCount && `(${bulkPreviewClients.length} affichés sur ${bulkPreviewCount})`}
+                      </div>
+                      <div className="divide-y divide-slate-100">
+                        {bulkPreviewClients.map(c => (
+                          <div key={c.id} className="px-4 py-2.5 flex items-center justify-between text-sm hover:bg-slate-50">
+                            <div>
+                              <p className="font-semibold text-slate-900">{c.name}</p>
+                              <p className="text-xs text-slate-400">{c.commercial?.name} {c.commercial?.zone ? `· ${c.commercial.zone}` : ''} · {c.type}</p>
+                            </div>
+                            <span className="text-xs text-slate-400">{c.createdAt ? new Date(c.createdAt).toLocaleDateString('fr-FR') : ''}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between gap-3 pt-2">
+                    <button type="button" onClick={() => { setBulkStep(1); setBulkError(''); }} className="px-5 py-2.5 border border-slate-200 text-slate-600 text-sm rounded-xl hover:bg-slate-50 flex items-center gap-2">
+                      ← Modifier les filtres
+                    </button>
+                    <div className="flex gap-3">
+                      <button type="button" onClick={() => setShowBulkDelete(false)} className="px-5 py-2.5 border border-slate-200 text-slate-600 text-sm rounded-xl hover:bg-slate-50">Annuler</button>
+                      <button
+                        type="button"
+                        onClick={handleBulkDelete}
+                        disabled={isBulkDeleting || bulkPreviewCount === 0}
+                        className="px-5 py-2.5 bg-rose-700 text-white text-sm font-bold rounded-xl hover:bg-rose-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {isBulkDeleting ? <><Loader2 className="w-4 h-4 animate-spin" /> Suppression…</> : <><Trash2 className="w-4 h-4" /> Supprimer {bulkPreviewCount} client{bulkPreviewCount > 1 ? 's' : ''}</>}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
             </div>
-            <form onSubmit={handleZoneDelete} className="p-5 space-y-4">
-              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800">
-                <strong>⚠️ ATTENTION :</strong> Cette action supprimera définitivement tous les clients et leurs données (comptes, transactions, dettes) dont le commercial assigné appartient à la zone indiquée. Action irréversible.
-              </div>
-              <label className="block space-y-1">
-                <span className="text-xs font-semibold text-slate-500">Nom de la zone *</span>
-                <input
-                  type="text"
-                  required
-                  value={zoneToDelete}
-                  onChange={e => setZoneToDelete(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-rose-500"
-                  placeholder="Ex : caissier 1"
-                />
-              </label>
-              <p className="text-xs text-slate-500">Seront supprimés : tous les clients assignés à des commerciaux dont la zone correspond exactement à ce nom (insensible à la casse).</p>
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowZoneDelete(false)} className="px-4 py-2 border border-slate-200 text-slate-600 text-sm rounded-xl hover:bg-slate-50">Annuler</button>
-                <button type="submit" disabled={isZoneDeleting} className="px-4 py-2 bg-rose-600 text-white text-sm font-semibold rounded-xl hover:bg-rose-700 disabled:opacity-50 flex items-center gap-2">
-                  {isZoneDeleting && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Supprimer
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
     </div>
   );
