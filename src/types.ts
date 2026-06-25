@@ -90,7 +90,7 @@ export interface GrilleRow {
 
 // ─── Financement Biens — Non-Apprenant workflow ───────────────────────────────
 
-export type DureeFinancement = '4_mois' | '6_mois' | '8_mois' | '10_mois';
+export type DureeFinancement = 'mois_4' | 'mois_6' | 'mois_8' | 'mois_10';
 
 export interface GrilleNonApprenantRow {
   numero: number;

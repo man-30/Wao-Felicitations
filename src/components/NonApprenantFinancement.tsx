@@ -35,6 +35,7 @@ export default function NonApprenantFinancement({ currentUser }: Props) {
     fetchComm();
   }, []);
   const [nonApprenants, setNonApprenants] = useState<NonApprenant[]>(db.getNonApprenants());
+  const [financements, setFinancements] = useState<FinancementNonApprenant[]>(db.getFinancements());
   const [search, setSearch] = useState('');
   const [showWizard, setShowWizard] = useState(false);
   const [step, setStep] = useState(1);
@@ -58,7 +59,7 @@ export default function NonApprenantFinancement({ currentUser }: Props) {
   const [bienFinance, setBienFinance] = useState('');
   const [valeurBien, setValeurBien] = useState(0);
   const [apportPersonnel, setApportPersonnel] = useState(0);
-  const [dureeChoisie, setDureeChoisie] = useState<DureeFinancement>('4_mois');
+  const [dureeChoisie, setDureeChoisie] = useState<DureeFinancement>('mois_4');
 
   const [error, setError] = useState('');
 
@@ -69,7 +70,7 @@ export default function NonApprenantFinancement({ currentUser }: Props) {
     setFullName(''); setPhone(''); setIdNumber(''); setCommercialId('');
     setAdhesionPaid(false); setCarnetPaid(false);
     setPieceProvided(false); setPhotosProvided(false);
-    setWantFinancement(false); setBienFinance(''); setValeurBien(0); setApportPersonnel(0); setDureeChoisie('4_mois');
+    setWantFinancement(false); setBienFinance(''); setValeurBien(0); setApportPersonnel(0); setDureeChoisie('mois_4');
     setShowWizard(false);
   };
 
@@ -375,10 +376,10 @@ export default function NonApprenantFinancement({ currentUser }: Props) {
                       <label className="space-y-1"><span className="text-xs font-semibold text-slate-500">Apport personnel libre du client (FCFA) *</span><input type="number" className="inp" value={apportPersonnel || ''} onChange={e => setApportPersonnel(Number(e.target.value))} placeholder="Le client apporte ce qu'il a" /></label>
                       <label className="space-y-1"><span className="text-xs font-semibold text-slate-500">Durée du remboursement</span>
                         <select className="inp" value={dureeChoisie} onChange={e => setDureeChoisie(e.target.value as DureeFinancement)}>
-                          <option value="4_mois">≤ 4 mois</option>
-                          <option value="6_mois">≤ 6 mois</option>
-                          <option value="8_mois">≤ 8 mois</option>
-                          <option value="10_mois">≤ 10 mois</option>
+                          <option value="mois_4">≤ 4 mois</option>
+                          <option value="mois_6">≤ 6 mois</option>
+                          <option value="mois_8">≤ 8 mois</option>
+                          <option value="mois_10">≤ 10 mois</option>
                         </select>
                       </label>
 
