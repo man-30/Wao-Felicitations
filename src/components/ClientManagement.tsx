@@ -41,6 +41,14 @@ export default function ClientManagement({ currentUser }: Props) {
     fetchClients();
   }, []);
 
+  // Polling toutes les 30 secondes pour synchroniser les soldes automatiquement
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchClients();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Create
   const [name, setName] = useState('');
   const [type, setType] = useState<ClientType>('simple');
@@ -104,6 +112,17 @@ export default function ClientManagement({ currentUser }: Props) {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [showEpargnantForm, setShowEpargnantForm] = useState(false);
   const [isEpargnantLoading, setIsEpargnantLoading] = useState(false);
+
+  // ── Mise journalière (épargnants simples) ────────────────────────────────
+  const [miseClient, setMiseClient] = useState<Client | null>(null);
+  const [miseAmount, setMiseAmount] = useState(0);
+  const [isMiseLoading, setIsMiseLoading] = useState(false);
+  const [miseError, setMiseError] = useState('');
+
+  // ── Suppression par zone ──────────────────────────────────────────────────
+  const [showZoneDelete, setShowZoneDelete] = useState(false);
+  const [zoneToDelete, setZoneToDelete] = useState('caissier 1');
+  const [isZoneDeleting, setIsZoneDeleting] = useState(false);
   const isAdmin = currentUser.role === 'admin';
   const isCashier = currentUser.role === 'caissier';
 
@@ -154,7 +173,9 @@ export default function ClientManagement({ currentUser }: Props) {
     };
 
     try {
-      const createdClient = await api.createClient({ name, type, phone, address, assignedCommercialId });
+      // Normaliser le type: 'non-apprenant' (frontend) → 'non_apprenant' (backend)
+      const backendType = type === 'non-apprenant' ? 'non_apprenant' : type;
+      const createdClient = await api.createClient({ name, type: backendType, phone, address, assignedCommercialId });
       setClients((prev) => [createdClient, ...prev]);
       db.saveClients([createdClient, ...db.getClients()]);
       if (type === 'apprenant') {
@@ -326,9 +347,46 @@ export default function ClientManagement({ currentUser }: Props) {
     setMsg({ text: 'Transfert d\'établissement enregistré.', type: 'success' });
   };
 
+  // ── Handler: configurer / modifier la mise journalière ───────────────────
+  const handleSetMiseJournaliere = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!miseClient || miseAmount <= 0) return;
+    setIsMiseLoading(true);
+    setMiseError('');
+    try {
+      await api.setMiseJournaliere(miseClient.id, miseAmount);
+      setMsg({ text: `Mise journalière de ${miseAmount.toLocaleString()} F configurée pour ${miseClient.name}.`, type: 'success' });
+      setMiseClient(null);
+      setMiseAmount(0);
+      fetchClients(); // rafraîchir pour afficher la nouvelle configuration
+    } catch (err: any) {
+      setMiseError(err.message || 'Erreur lors de la configuration.');
+    } finally {
+      setIsMiseLoading(false);
+    }
+  };
+
+  // ── Handler: supprimer les clients d'une zone ─────────────────────────────
+  const handleZoneDelete = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!zoneToDelete.trim()) return;
+    setIsZoneDeleting(true);
+    try {
+      const result = await api.deleteClientsByZone(zoneToDelete.trim());
+      setMsg({ text: result.message || `Clients de la zone "${zoneToDelete}" supprimés.`, type: 'success' });
+      setShowZoneDelete(false);
+      fetchClients();
+    } catch (err: any) {
+      setMsg({ text: err.message || 'Erreur lors de la suppression par zone.', type: 'error' });
+      setShowZoneDelete(false);
+    } finally {
+      setIsZoneDeleting(false);
+    }
+  };
+
   const typeBadge = (t: ClientType) => {
     if (t === 'apprenant') return <span className="px-2 py-1 text-xs font-semibold rounded bg-purple-100 text-purple-700 flex items-center gap-1"><GraduationCap className="w-3 h-3" /> Apprenant</span>;
-    if (t === 'non-apprenant') return <span className="px-2 py-1 text-xs font-semibold rounded bg-amber-100 text-amber-700 flex items-center gap-1"><Briefcase className="w-3 h-3" /> Non-apprenant</span>;
+    if (t === 'non-apprenant' || (t as string) === 'non_apprenant') return <span className="px-2 py-1 text-xs font-semibold rounded bg-amber-100 text-amber-700 flex items-center gap-1"><Briefcase className="w-3 h-3" /> Non-apprenant</span>;
     return <span className="px-2 py-1 text-xs font-semibold rounded bg-teal-100 text-teal-700 flex items-center gap-1"><UserCheck className="w-3 h-3" /> Épargnant</span>;
   };
 
@@ -545,6 +603,14 @@ export default function ClientManagement({ currentUser }: Props) {
               className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-900 shadow-lg shadow-indigo-100 transition-all hover:scale-105 active:scale-95"
             >
               <Upload className="h-4 w-4" /> Importation JSON
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              onClick={() => setShowZoneDelete(true)}
+              className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 shadow-lg shadow-rose-100 transition-all hover:scale-105 active:scale-95"
+            >
+              <Trash2 className="h-4 w-4" /> Supprimer par zone
             </button>
           )}
           {isCashier && (
@@ -794,11 +860,24 @@ export default function ClientManagement({ currentUser }: Props) {
                     <td className={`px-4 py-3 font-semibold ${financingBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{financingBalance.toLocaleString()} F</td>
                     <td className="px-4 py-3">{debt ? <><p className="font-medium text-slate-800">{debt.schoolName}</p><p className="text-xs text-indigo-600">Reste: {(Number(debt.debtAmount || 0) - Number(debt.paidAmount || 0)).toLocaleString()} F</p></> : <span className="text-slate-400 text-xs">—</span>}</td>
                     <td className="px-4 py-3">
-                      <div className="flex gap-1.5">
+                      <div className="flex gap-1.5 flex-wrap">
                         <button onClick={() => setViewClient(c)} title="Consulter" className="p-1.5 rounded-lg bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 border border-slate-200"><Eye className="w-3.5 h-3.5" /></button>
                         {isCashier && <button onClick={() => openEdit(c)} title="Modifier (code admin)" className="p-1.5 rounded-lg bg-slate-100 hover:bg-amber-50 text-slate-600 hover:text-amber-600 border border-slate-200"><Pencil className="w-3.5 h-3.5" /></button>}
                         {isAdmin && <button onClick={() => openDelete(c)} title="Supprimer (code admin)" className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200"><Trash2 className="w-3.5 h-3.5" /></button>}
                         {isCashier && c.type === 'apprenant' && <button onClick={() => setMigrateClient(c)} title="Changer établissement" className="p-1.5 rounded-lg bg-slate-100 hover:bg-purple-50 text-slate-600 hover:text-purple-600 border border-slate-200"><ArrowRightLeft className="w-3.5 h-3.5" /></button>}
+                        {(isCashier || isAdmin) && (c.type === 'simple' || (c.type as string) === 'simple') && (() => {
+                          const epargneAcc = accounts.find(a => a.clientId === c.id && a.type === 'epargne' && a.status !== 'ferme');
+                          const hasMise = epargneAcc && (epargneAcc.dailyContribution ?? 0) > 0;
+                          return (
+                            <button
+                              onClick={() => { setMiseClient(c); setMiseAmount(epargneAcc?.dailyContribution ?? 0); setMiseError(''); }}
+                              title={hasMise ? `Modifier la mise journalière (${epargneAcc?.dailyContribution?.toLocaleString()} F/j)` : 'Configurer la mise journalière (tontine)'}
+                              className={`p-1.5 rounded-lg border text-xs font-semibold ${hasMise ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-300' : 'bg-teal-100 text-teal-700 hover:bg-teal-200 border-teal-300'}`}
+                            >
+                              <PiggyBank className="w-3.5 h-3.5" />
+                            </button>
+                          );
+                        })()}
                         {schoolDebts.length > 0 && <button onClick={() => { const h = schoolDebts.map(d => `${d.schoolName}: ${d.paidAmount}/${d.debtAmount} F (${d.active ? 'Actif' : 'Ancien'})`).join('\n'); alert(`Historique Scolarité — ${c.name}\n\n${h}`); }} title="Historique dettes" className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200"><History className="w-3.5 h-3.5" /></button>}
                       </div>
                     </td>
@@ -1376,6 +1455,91 @@ export default function ClientManagement({ currentUser }: Props) {
           </div>
         );
       })()}
+
+      {/* ── Modal : Mise journalière (tontine épargnants simples) ─────────── */}
+      {miseClient && (
+        <div className="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-teal-700 text-white">
+              <h3 className="font-semibold flex items-center gap-2">
+                <PiggyBank className="w-4 h-4" />
+                {accounts.find(a => a.clientId === miseClient.id && a.type === 'epargne' && a.status !== 'ferme' && (a.dailyContribution ?? 0) > 0)
+                  ? 'Modifier la mise journalière'
+                  : 'Configurer la mise journalière'}
+              </h3>
+              <button onClick={() => { setMiseClient(null); setMiseError(''); }} className="p-1 hover:bg-teal-600 rounded-full"><X className="w-4 h-4" /></button>
+            </div>
+            <form onSubmit={handleSetMiseJournaliere} className="p-5 space-y-4">
+              {miseError && <div className="p-3 text-sm rounded-xl bg-red-50 text-red-600 border border-red-200">{miseError}</div>}
+              <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl text-xs text-teal-800">
+                <strong>Tontine Épargnant :</strong> La première cotisation enregistrée pour ce client constituera un bénéfice de l'entreprise (case 1). Toutes les cotisations suivantes s'accumuleront dans son épargne.
+              </div>
+              <p className="text-sm text-slate-600">Client : <strong>{miseClient.name}</strong></p>
+              <label className="block space-y-1">
+                <span className="text-xs font-semibold text-slate-500">Montant journalier (F CFA) *</span>
+                <input
+                  type="number"
+                  required
+                  min={50}
+                  step={50}
+                  value={miseAmount || ''}
+                  onChange={e => setMiseAmount(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-500"
+                  placeholder="Ex : 200"
+                />
+              </label>
+              {miseAmount > 0 && (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700">
+                  <strong>Récapitulatif :</strong> {miseAmount.toLocaleString()} F/jour · ~{(miseAmount * 30).toLocaleString()} F/mois
+                </div>
+              )}
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => { setMiseClient(null); setMiseError(''); }} className="px-4 py-2 border border-slate-200 text-slate-600 text-sm rounded-xl hover:bg-slate-50">Annuler</button>
+                <button type="submit" disabled={isMiseLoading || miseAmount <= 0} className="px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-xl hover:bg-teal-700 disabled:opacity-50 flex items-center gap-2">
+                  {isMiseLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Confirmer
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal : Supprimer clients par zone ───────────────────────────── */}
+      {showZoneDelete && (
+        <div className="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-rose-800 text-white">
+              <h3 className="font-semibold flex items-center gap-2"><Trash2 className="w-4 h-4" /> Suppression par zone</h3>
+              <button onClick={() => setShowZoneDelete(false)} className="p-1 hover:bg-rose-700 rounded-full"><X className="w-4 h-4" /></button>
+            </div>
+            <form onSubmit={handleZoneDelete} className="p-5 space-y-4">
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800">
+                <strong>⚠️ ATTENTION :</strong> Cette action supprimera définitivement tous les clients et leurs données (comptes, transactions, dettes) dont le commercial assigné appartient à la zone indiquée. Action irréversible.
+              </div>
+              <label className="block space-y-1">
+                <span className="text-xs font-semibold text-slate-500">Nom de la zone *</span>
+                <input
+                  type="text"
+                  required
+                  value={zoneToDelete}
+                  onChange={e => setZoneToDelete(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-rose-500"
+                  placeholder="Ex : caissier 1"
+                />
+              </label>
+              <p className="text-xs text-slate-500">Seront supprimés : tous les clients assignés à des commerciaux dont la zone correspond exactement à ce nom (insensible à la casse).</p>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setShowZoneDelete(false)} className="px-4 py-2 border border-slate-200 text-slate-600 text-sm rounded-xl hover:bg-slate-50">Annuler</button>
+                <button type="submit" disabled={isZoneDeleting} className="px-4 py-2 bg-rose-600 text-white text-sm font-semibold rounded-xl hover:bg-rose-700 disabled:opacity-50 flex items-center gap-2">
+                  {isZoneDeleting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Supprimer
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );

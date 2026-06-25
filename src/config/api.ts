@@ -111,6 +111,20 @@ export const api = {
     return this.request<any>('/api/admin/wipe-clients', { method: 'DELETE' });
   },
 
+  async deleteClientsByZone(zone: string) {
+    return this.request<any>('/api/admin/clients-by-zone', {
+      method: 'DELETE',
+      body: JSON.stringify({ zone }),
+    });
+  },
+
+  async setMiseJournaliere(clientId: string, amount: number) {
+    return this.request<any>(`/api/clients/${clientId}/mise-journaliere`, {
+      method: 'PUT',
+      body: JSON.stringify({ amount }),
+    });
+  },
+
   // Transactions
   async getTransactions() {
     return this.request<any[]>('/api/transactions');

@@ -350,7 +350,10 @@ app.post('/api/clients', authenticateToken, requireRole('admin', 'commercial', '
       return res.status(400).json({ error: 'Missing required fields: name, type, phone' })
     }
 
-    if (!['apprenant', 'non_apprenant', 'simple'].includes(type)) {
+    // Normaliser: accepter 'non-apprenant' (tiret) ou 'non_apprenant' (underscore)
+    const normalizedType = type === 'non-apprenant' ? 'non_apprenant' : type
+
+    if (!['apprenant', 'non_apprenant', 'simple'].includes(normalizedType)) {
       return res.status(400).json({ error: 'Invalid client type' })
     }
 
@@ -388,7 +391,7 @@ app.post('/api/clients', authenticateToken, requireRole('admin', 'commercial', '
 
     const client = await createClientWithCodes({
       name,
-      type,
+      type: normalizedType as any,
       phone,
       address,
       assignedCommercialId,
@@ -412,6 +415,43 @@ app.post('/api/apprenants', authenticateToken, requireRole('admin', 'caissier', 
   try {
     const result = await createApprenantEnrollment(req.body)
     await logCreateClient(req.user!.userId, req.user!.email, req.user!.role, result.client.id, result.client.name, result.client.type)
+
+    // ── Synchroniser les frais vers la trésorerie (Produits & Charges) ────
+    try {
+      const caisseProduits = await prisma.cashRegister.findFirst({ where: { type: 'produits_charges' } })
+      if (caisseProduits && result.tontine) {
+        const t = result.tontine
+        const feesToRecord = [
+          { category: 'frais_dossiers' as const, amount: t.fraisDossier, label: 'Frais de dossier' },
+          { category: 'frais_prestation' as const, amount: t.fraisAssurance, label: 'Frais assurance' },
+          { category: 'frais_prestation' as const, amount: t.fraisPrestation, label: 'Frais de prestation' },
+          { category: 'vente_livret_individuel' as const, amount: t.adhesionPaid, label: 'Adhésion' },
+          { category: 'vente_livret_individuel' as const, amount: t.carnetPaid, label: 'Carnet de cotisation' },
+        ].filter(f => Number(f.amount) > 0)
+
+        for (const fee of feesToRecord) {
+          await prisma.productRevenue.create({
+            data: {
+              cashRegisterId: caisseProduits.id,
+              category: fee.category,
+              amount: new Decimal(fee.amount),
+              description: `${fee.label} — ${result.client.name}`,
+              recordedBy: req.user!.userId,
+              recordedByName: req.user!.email,
+              date: new Date(),
+            },
+          })
+          await prisma.cashRegister.update({
+            where: { id: caisseProduits.id },
+            data: { balance: { increment: new Decimal(fee.amount) }, lastMovement: new Date() },
+          })
+        }
+      }
+    } catch (feeErr) {
+      console.error('[FEE SYNC ERROR - Apprenant]', feeErr)
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     res.status(201).json(result)
   } catch (error: any) {
     console.error('Error in apprenant enrollment:', error)
@@ -427,6 +467,78 @@ app.post('/api/non-apprenants', authenticateToken, requireRole('admin', 'caissie
   try {
     const result = await createNonApprenantEnrollment(req.body)
     await logCreateClient(req.user!.userId, req.user!.email, req.user!.role, result.client.id, result.client.name, result.client.type)
+
+    // ── Synchroniser frais adhésion + carnet vers la trésorerie ──────────
+    try {
+      const caisseProduits = await prisma.cashRegister.findFirst({ where: { type: 'produits_charges' } })
+      if (caisseProduits) {
+        const ADHESION_NON_APPRENANT = 5500
+        const CARNET_MONTANT = 500
+        const feesToRecord = [
+          { category: 'frais_dossiers' as const, amount: ADHESION_NON_APPRENANT, label: 'Adhésion non-apprenant (frais)' },
+          { category: 'vente_livret_individuel' as const, amount: CARNET_MONTANT, label: 'Carnet de cotisation' },
+        ]
+        for (const fee of feesToRecord) {
+          await prisma.productRevenue.create({
+            data: {
+              cashRegisterId: caisseProduits.id,
+              category: fee.category,
+              amount: new Decimal(fee.amount),
+              description: `${fee.label} — ${result.client.name}`,
+              recordedBy: req.user!.userId,
+              recordedByName: req.user!.email,
+              date: new Date(),
+            },
+          })
+          await prisma.cashRegister.update({
+            where: { id: caisseProduits.id },
+            data: { balance: { increment: new Decimal(fee.amount) }, lastMovement: new Date() },
+          })
+        }
+        // Si financement inclus, enregistrer les frais de dossier du financement
+        if (req.body.financement) {
+          const fin = req.body.financement
+          if (fin.fraisDossier > 0) {
+            await prisma.productRevenue.create({
+              data: {
+                cashRegisterId: caisseProduits.id,
+                category: 'frais_dossiers',
+                amount: new Decimal(fin.fraisDossier),
+                description: `Frais dossier financement ${fin.bienFinance || ''} — ${result.client.name}`,
+                recordedBy: req.user!.userId,
+                recordedByName: req.user!.email,
+                date: new Date(),
+              },
+            })
+            await prisma.cashRegister.update({
+              where: { id: caisseProduits.id },
+              data: { balance: { increment: new Decimal(fin.fraisDossier) }, lastMovement: new Date() },
+            })
+          }
+          if (fin.fraisPrestation > 0) {
+            await prisma.productRevenue.create({
+              data: {
+                cashRegisterId: caisseProduits.id,
+                category: 'frais_prestation',
+                amount: new Decimal(fin.fraisPrestation),
+                description: `Frais prestation financement ${fin.bienFinance || ''} — ${result.client.name}`,
+                recordedBy: req.user!.userId,
+                recordedByName: req.user!.email,
+                date: new Date(),
+              },
+            })
+            await prisma.cashRegister.update({
+              where: { id: caisseProduits.id },
+              data: { balance: { increment: new Decimal(fin.fraisPrestation) }, lastMovement: new Date() },
+            })
+          }
+        }
+      }
+    } catch (feeErr) {
+      console.error('[FEE SYNC ERROR - NonApprenant]', feeErr)
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     res.status(201).json(result)
   } catch (error: any) {
     console.error('Error in non-apprenant enrollment:', error)
@@ -547,6 +659,140 @@ app.delete('/api/admin/wipe-clients', authenticateToken, requireRole('admin'), a
   } catch (error: any) {
     console.error('[WIPE ERROR]', error)
     res.status(500).json({ error: 'Wipe failed', message: error.message })
+  }
+})
+
+/**
+ * DELETE /api/admin/clients-by-zone
+ * Supprime tous les clients assignés à des commerciaux d'une zone donnée
+ * Rôles: admin uniquement
+ * Body: { zone: string } — ex: { "zone": "caissier 1" }
+ */
+app.delete('/api/admin/clients-by-zone', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    const zone = req.body.zone || req.query.zone as string
+    if (!zone) {
+      return res.status(400).json({ error: 'Le champ "zone" est obligatoire.' })
+    }
+
+    console.log(`[DELETE-BY-ZONE] Zone: "${zone}" — demandé par ${req.user!.email}`)
+
+    // Trouver tous les commerciaux de cette zone
+    const commercials = await prisma.user.findMany({
+      where: { zone: { equals: zone, mode: 'insensitive' }, role: 'commercial' },
+      select: { id: true, name: true },
+    })
+
+    if (commercials.length === 0) {
+      return res.status(404).json({ error: `Aucun commercial trouvé pour la zone "${zone}".` })
+    }
+
+    const commercialIds = commercials.map(c => c.id)
+
+    // Trouver tous les clients de ces commerciaux
+    const clients = await prisma.client.findMany({
+      where: { assignedCommercialId: { in: commercialIds } },
+      select: { id: true, name: true },
+    })
+
+    if (clients.length === 0) {
+      return res.json({ deleted: 0, message: `Aucun client trouvé pour la zone "${zone}".` })
+    }
+
+    const clientIds = clients.map(c => c.id)
+
+    // Supprimer dans l'ordre inverse des dépendances
+    await prisma.$transaction([
+      prisma.cotisation.deleteMany({
+        where: { tontineAccount: { apprenant: { clientId: { in: clientIds } } } },
+      }),
+      prisma.transaction.deleteMany({ where: { clientId: { in: clientIds } } }),
+      prisma.insuranceTransaction.deleteMany({ where: { clientId: { in: clientIds } } }),
+      prisma.schoolDebt.deleteMany({ where: { clientId: { in: clientIds } } }),
+      prisma.tontineAccount.deleteMany({
+        where: { apprenant: { clientId: { in: clientIds } } },
+      }),
+      prisma.financementNonApprenant.deleteMany({
+        where: { nonApprenant: { clientId: { in: clientIds } } },
+      }),
+      prisma.apprenant.deleteMany({ where: { clientId: { in: clientIds } } }),
+      prisma.nonApprenant.deleteMany({ where: { clientId: { in: clientIds } } }),
+      prisma.account.deleteMany({ where: { clientId: { in: clientIds } } }),
+      prisma.client.deleteMany({ where: { id: { in: clientIds } } }),
+    ])
+
+    console.log(`[DELETE-BY-ZONE] ${clients.length} clients supprimés pour la zone "${zone}"`)
+
+    res.json({
+      deleted: clients.length,
+      zone,
+      commercials: commercials.map(c => c.name),
+      message: `${clients.length} client(s) supprimés pour la zone "${zone}".`,
+    })
+  } catch (error: any) {
+    console.error('[DELETE-BY-ZONE ERROR]', error)
+    res.status(500).json({ error: 'Suppression par zone échouée', message: error.message })
+  }
+})
+
+/**
+ * PUT /api/clients/:clientId/mise-journaliere
+ * Configure ou modifie la mise journalière (cotisation quotidienne tontine)
+ * pour les clients de type "simple" (épargnants)
+ * Rôles: admin, caissier
+ */
+app.put('/api/clients/:clientId/mise-journaliere', authenticateToken, requireRole('admin', 'caissier'), async (req: Request, res: Response) => {
+  try {
+    const { clientId } = req.params
+    const { amount } = req.body
+
+    if (!amount || Number(amount) <= 0) {
+      return res.status(400).json({ error: 'Le montant de la mise journalière doit être supérieur à 0.' })
+    }
+
+    const client = await prisma.client.findUnique({ where: { id: clientId } })
+    if (!client) {
+      return res.status(404).json({ error: 'Client introuvable.' })
+    }
+    if (client.type !== 'simple') {
+      return res.status(400).json({ error: 'La mise journalière ne s\'applique qu\'aux épargnants simples.' })
+    }
+
+    // Trouver ou créer le compte épargne actif
+    let epargneAcc = await prisma.account.findFirst({
+      where: { clientId, type: 'epargne', status: 'actif' },
+    })
+
+    if (!epargneAcc) {
+      // Créer le compte épargne si absent
+      epargneAcc = await prisma.account.create({
+        data: {
+          clientId,
+          type: 'epargne',
+          accountNumber: `EP-${client.accountNumber}`,
+          label: `Compte tontine épargnant - ${client.name}`,
+          balance: new Decimal(0),
+          dailyContribution: new Decimal(amount),
+          totalPaid: new Decimal(0),
+          status: 'actif',
+          createdBy: req.user!.userId,
+          createdByName: req.user!.email,
+        },
+      })
+    } else {
+      epargneAcc = await prisma.account.update({
+        where: { id: epargneAcc.id },
+        data: { dailyContribution: new Decimal(amount) },
+      })
+    }
+
+    res.json({
+      account: epargneAcc,
+      message: `Mise journalière de ${amount} F configurée pour ${client.name}.`,
+    })
+  } catch (error: any) {
+    console.error('[MISE-JOURNALIERE ERROR]', error)
+    res.status(500).json({ error: 'Erreur lors de la configuration de la mise journalière.', message: error.message })
   }
 })
 
@@ -962,6 +1208,91 @@ app.put('/api/transactions/:transactionId/validate', authenticateToken, requireR
       },
     })
 
+    // ── Mettre à jour savingsBalance du client lors de la validation ──────
+    try {
+      const client = await prisma.client.findUnique({ where: { id: current.clientId } })
+      if (client) {
+        if (updated.type === 'depot') {
+          await prisma.client.update({
+            where: { id: current.clientId },
+            data: { savingsBalance: { increment: updated.amount } },
+          })
+          // Mettre à jour aussi le compte épargne actif
+          const epargneAcc = await prisma.account.findFirst({
+            where: { clientId: current.clientId, type: 'epargne', status: 'actif' },
+          })
+          if (epargneAcc) {
+            await prisma.account.update({
+              where: { id: epargneAcc.id },
+              data: { balance: { increment: updated.amount } },
+            })
+          }
+        } else if (updated.type === 'retrait') {
+          await prisma.client.update({
+            where: { id: current.clientId },
+            data: { savingsBalance: { decrement: updated.amount } },
+          })
+          const epargneAcc = await prisma.account.findFirst({
+            where: { clientId: current.clientId, type: 'epargne', status: 'actif' },
+          })
+          if (epargneAcc) {
+            await prisma.account.update({
+              where: { id: epargneAcc.id },
+              data: { balance: { decrement: updated.amount } },
+            })
+          }
+        } else if (updated.type === 'cotisation' && client.type === 'simple') {
+          // Tontine pour épargnants simples : vérifier si c'est la 1ère cotisation
+          const epargneAcc = await prisma.account.findFirst({
+            where: { clientId: current.clientId, type: 'epargne', status: 'actif' },
+          })
+          if (epargneAcc) {
+            const existingTotalPaid = (epargneAcc.totalPaid ?? new Decimal(0)).toNumber()
+            const isFirstCotisation = existingTotalPaid === 0
+            // Mettre à jour totalPaid dans tous les cas
+            await prisma.account.update({
+              where: { id: epargneAcc.id },
+              data: { totalPaid: { increment: updated.amount } },
+            })
+            // La 1ère cotisation va à l'entreprise (bénéfice) — ne pas créditer le client
+            // Toutes les suivantes sont créditées au client
+            if (!isFirstCotisation) {
+              await prisma.account.update({
+                where: { id: epargneAcc.id },
+                data: { balance: { increment: updated.amount } },
+              })
+              await prisma.client.update({
+                where: { id: current.clientId },
+                data: { savingsBalance: { increment: updated.amount } },
+              })
+            }
+          }
+        }
+        // Mettre à jour la caisse générale (dépôts et cotisations uniquement)
+        if (['depot', 'cotisation'].includes(updated.type)) {
+          const mainCaisse = await prisma.cashRegister.findFirst({ where: { type: 'generale' } })
+          if (mainCaisse) {
+            await prisma.cashRegister.update({
+              where: { id: mainCaisse.id },
+              data: { balance: { increment: updated.amount }, lastMovement: new Date() },
+            })
+          }
+        } else if (updated.type === 'retrait') {
+          const mainCaisse = await prisma.cashRegister.findFirst({ where: { type: 'generale' } })
+          if (mainCaisse) {
+            await prisma.cashRegister.update({
+              where: { id: mainCaisse.id },
+              data: { balance: { decrement: updated.amount }, lastMovement: new Date() },
+            })
+          }
+        }
+      }
+    } catch (balanceErr) {
+      console.error('[BALANCE UPDATE ERROR]', balanceErr)
+      // Ne pas bloquer la réponse si la mise à jour du solde échoue
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     // Logger la validation
     await logValidateTransaction(req.user!.userId, req.user!.email, req.user!.role, updated.id, updated.amount.toNumber())
 
@@ -1030,7 +1361,57 @@ app.post('/api/cotisations', authenticateToken, requirePermission('record:cotisa
       recordedBy: req.user!.userId,
     })
 
-    await logRecordCotisation(req.user!.userId, req.user!.email, req.user!.role, clientId || resolvedTontineAccountId, amount, cotisation.id)
+    // ── Mise à jour automatique des soldes client ──────────────────────────
+    // Récupérer clientId depuis le tontineAccount si non fourni directement
+    let resolvedClientId = clientId
+    if (!resolvedClientId) {
+      const tontineAccWithClient = await prisma.tontineAccount.findUnique({
+        where: { id: resolvedTontineAccountId },
+        include: { apprenant: { select: { clientId: true } } },
+      })
+      resolvedClientId = tontineAccWithClient?.apprenant?.clientId ?? null
+    }
+
+    if (resolvedClientId) {
+      // 1. Incrémenter financingBalance (réduit la dette, car initialisée à -totalCapital)
+      await prisma.client.update({
+        where: { id: resolvedClientId },
+        data: { financingBalance: { increment: new Decimal(amount) } },
+      })
+
+      // 2. Mettre à jour totalPaid sur le compte financement actif du client
+      const finAccount = await prisma.account.findFirst({
+        where: { clientId: resolvedClientId, type: 'financement', status: 'actif' },
+      })
+      if (finAccount) {
+        const newTotalPaid = (finAccount.totalPaid ?? new Decimal(0)).toNumber() + Number(amount)
+        const totalDue = (finAccount.totalDue ?? new Decimal(0)).toNumber()
+        const isSolde = newTotalPaid >= totalDue && totalDue > 0
+        await prisma.account.update({
+          where: { id: finAccount.id },
+          data: {
+            totalPaid: new Decimal(newTotalPaid),
+            ...(isSolde ? { status: 'solde' } : {}),
+          },
+        })
+      }
+
+      // 3. Mettre à jour la dette scolaire active (paidAmount)
+      const activeDebt = await prisma.schoolDebt.findFirst({
+        where: { clientId: resolvedClientId, active: true },
+      })
+      if (activeDebt) {
+        const newPaid = activeDebt.paidAmount.toNumber() + Number(amount)
+        const maxPaid = activeDebt.debtAmount.toNumber()
+        await prisma.schoolDebt.update({
+          where: { id: activeDebt.id },
+          data: { paidAmount: new Decimal(Math.min(newPaid, maxPaid)) },
+        })
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
+    await logRecordCotisation(req.user!.userId, req.user!.email, req.user!.role, resolvedClientId || resolvedTontineAccountId, amount, cotisation.id)
 
     res.status(201).json({
       cotisation: {
