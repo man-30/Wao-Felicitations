@@ -50,13 +50,8 @@ export default function CashierCaisse(_props: Props) {
       });
   }, [approved, expenses]);
 
-  // Today's variation
-  const refDate = useMemo(() => {
-    const dates = transactions.map(t => parseD(t.date));
-    if (!dates.length) return new Date();
-    return dates.reduce((l, d) => d > l ? d : l, dates[0]);
-  }, [transactions]);
-  const today = refDate.toISOString().slice(0, 10);
+  // Data de referência deve sempre ser a data atual, não a última transação
+  const today = new Date().toISOString().slice(0, 10);
   const todayIn = approved.filter(t => t.date === today && t.type !== 'retrait').reduce((s, t) => s + t.amount, 0);
   const todayOut = approved.filter(t => t.date === today && t.type === 'retrait').reduce((s, t) => s + t.amount, 0) + expenses.filter(e => e.date === today).reduce((s, e) => s + e.amount, 0);
   const todayVar = todayIn - todayOut;

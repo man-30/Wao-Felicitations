@@ -92,13 +92,8 @@ export default function CashierDashboard({ currentUser }: CashierDashboardProps)
     return () => clearInterval(interval);
   }, []);
 
-  const refDate = useMemo(() => {
-    const dates = transactions.map((t) => parseD(t.date));
-    if (!dates.length) return new Date();
-    return dates.reduce((l, d) => (d > l ? d : l), dates[0]);
-  }, [transactions]);
-
-  const today = refDate.toISOString().slice(0, 10);
+  // Data de referência deve sempre ser a data atual, não a última transação
+  const today = new Date().toISOString().slice(0, 10);
 
   const approved = useMemo(() => transactions.filter((t) => t.status === 'approved'), [transactions]);
 

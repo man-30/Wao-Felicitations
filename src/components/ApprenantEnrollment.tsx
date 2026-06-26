@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../config/api';
 import {
   Apprenant, ApprenantDocument, Caution, Client,
-  DocumentStatus, Guardian, TontineAccount, Transaction, User,
+  DocumentStatus, Guardian, InsuranceTransaction, TontineAccount, Transaction, User,
 } from '../types';
 import { db } from '../localStorageDB';
 import { ADHESION_MONTANT, CARNET_MONTANT, GRILLE, calculerGrille } from '../grille';
@@ -252,6 +252,20 @@ export default function ApprenantEnrollment({ currentUser }: Props) {
         { id: 'p_car_' + Date.now(), category: 'Vente de livret tontine' as any, amount: CARNET_MONTANT, description: `Livret tontine ${studentName}`, date: now, recordedBy: currentUser.id, recordedByName: currentUser.name },
         ...(calcul.fraisDossier > 0 ? [{ id: 'p_dos_' + Date.now(), category: 'Frais de dossiers' as any, amount: calcul.fraisDossier, description: `Frais dossier apprenant ${studentName}`, date: now, recordedBy: currentUser.id, recordedByName: currentUser.name }] : [])
       ]);
+
+      // Crédit automatique caisse assurance — 1 000 F par apprenant inscrit
+      const insuranceCreditTx: InsuranceTransaction = {
+        id: `ins_${result.client.id}`,
+        amount: 1000,
+        type: 'credit',
+        description: `Cotisation assurance — ${studentName}`,
+        clientId: result.client.id,
+        clientName: studentName,
+        date: now,
+        operatedBy: currentUser.id,
+        operatedByName: currentUser.name,
+      };
+      db.saveInsuranceTxs([...db.getInsuranceTxs(), insuranceCreditTx]);
 
       // Logs
       db.addLog(currentUser.id, currentUser.name, currentUser.role, 'Inscription Apprenant',

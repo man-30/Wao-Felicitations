@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { InsuranceTransaction, User } from '../types';
 import { db } from '../localStorageDB';
 import { Shield, TrendingDown, AlertTriangle, ArrowDownLeft } from 'lucide-react';
@@ -11,6 +11,36 @@ export default function InsuranceFundManagement({ currentUser }: Props) {
   const [withdrawAmount, setWithdrawAmount] = useState(0);
   const [withdrawMotif, setWithdrawMotif] = useState('');
   const [msg, setMsg] = useState({ text: '', type: '' });
+
+  // Rétroactivement créditer les apprenants existants non encore enregistrés dans la caisse
+  useEffect(() => {
+    const allApprenants = db.getApprenants();
+    const existingTxs = db.getInsuranceTxs();
+    const creditedClientIds = new Set(
+      existingTxs
+        .filter(tx => tx.type === 'credit' && tx.clientId)
+        .map(tx => tx.clientId!)
+    );
+    const uncredited = allApprenants.filter(ap => !creditedClientIds.has(ap.clientId));
+    if (uncredited.length === 0) return;
+
+    const clientsMap = new Map(db.getClients().map(c => [c.id, c.name]));
+    const now = new Date().toISOString().split('T')[0];
+    const newCredits: InsuranceTransaction[] = uncredited.map(ap => ({
+      id: `ins_${ap.clientId}`,
+      amount: 1000,
+      type: 'credit',
+      description: `Cotisation assurance — ${clientsMap.get(ap.clientId) ?? ap.studentName}`,
+      clientId: ap.clientId,
+      clientName: clientsMap.get(ap.clientId) ?? ap.studentName,
+      date: ap.createdAt ?? now,
+      operatedBy: 'system',
+      operatedByName: 'Initialisation automatique',
+    }));
+    const updated = [...existingTxs, ...newCredits];
+    db.saveInsuranceTxs(updated);
+    setTxs(updated);
+  }, []);
 
   const balance = txs.reduce((sum, tx) => tx.type === 'credit' ? sum + tx.amount : sum - tx.amount, 0);
   const totalCredits = txs.filter(t => t.type === 'credit').reduce((s, t) => s + t.amount, 0);
