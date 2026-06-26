@@ -1474,27 +1474,47 @@ app.post('/api/cotisations', authenticateToken, requirePermission('record:cotisa
     }
 
     if (resolvedClientId) {
-      // 1. Incrémenter financingBalance (réduit la dette, car initialisée à -totalCapital)
-      await prisma.client.update({
-        where: { id: resolvedClientId },
-        data: { financingBalance: { increment: new Decimal(amount) } },
-      })
-
-      // 2. Mettre à jour totalPaid sur le compte financement actif du client
+      // 1. Vérifier s'il y a un compte financement actif
       const finAccount = await prisma.account.findFirst({
         where: { clientId: resolvedClientId, type: 'financement', status: 'actif' },
       })
+
       if (finAccount) {
+        // 2a. Financement actif: incrémenter financingBalance et mettre à jour totalPaid + balance
+        await prisma.client.update({
+          where: { id: resolvedClientId },
+          data: { financingBalance: { increment: new Decimal(amount) } },
+        })
+        
         const newTotalPaid = (finAccount.totalPaid ?? new Decimal(0)).toNumber() + Number(amount)
         const totalDue = (finAccount.totalDue ?? new Decimal(0)).toNumber()
+        const newBalance = Math.max(0, totalDue - newTotalPaid)
         const isSolde = newTotalPaid >= totalDue && totalDue > 0
         await prisma.account.update({
           where: { id: finAccount.id },
           data: {
             totalPaid: new Decimal(newTotalPaid),
+            balance: new Decimal(newBalance),
             ...(isSolde ? { status: 'solde' } : {}),
           },
         })
+      } else {
+        // 2b. Pas de financement actif: incrémenter savingsBalance et mettre à jour compte épargne
+        await prisma.client.update({
+          where: { id: resolvedClientId },
+          data: { savingsBalance: { increment: new Decimal(amount) } },
+        })
+        
+        const savingsAccount = await prisma.account.findFirst({
+          where: { clientId: resolvedClientId, type: 'epargne', status: 'actif' },
+        })
+        if (savingsAccount) {
+          const newBalance = (savingsAccount.balance ?? new Decimal(0)).toNumber() + Number(amount)
+          await prisma.account.update({
+            where: { id: savingsAccount.id },
+            data: { balance: new Decimal(newBalance) },
+          })
+        }
       }
 
       // 3. Mettre à jour la dette scolaire active (paidAmount)

@@ -12,7 +12,8 @@ import {
   X,
   Wallet,
   ChevronRight,
-  CalendarDays
+  CalendarDays,
+  Loader2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -57,6 +58,12 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
   const [dailyAmount, setDailyAmount] = useState<number>(0); // Pre-filled daily amount (DIRECTIVE 4)
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Mise journalière (daily contribution) configuration
+  const [miseClient, setMiseClient] = useState<Client | null>(null);
+  const [miseAmount, setMiseAmount] = useState<number>(0);
+  const [isMiseLoading, setIsMiseLoading] = useState(false);
+  const [miseError, setMiseError] = useState('');
+
   const [msg, setMsg] = useState({ text: '', type: '' });
 
   // Stats
@@ -70,6 +77,28 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     c.phone.includes(searchTerm)
   );
+
+  // Handler: configure/modify daily contribution (mise journalière)
+  const handleSetMiseJournaliere = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!miseClient || miseAmount <= 0) return;
+    setIsMiseLoading(true);
+    setMiseError('');
+    try {
+      await api.setMiseJournaliere(miseClient.id, miseAmount);
+      setMsg({ text: `Mise journalière de ${miseAmount.toLocaleString()} F configurée pour ${miseClient.name}.`, type: 'success' });
+      setMiseClient(null);
+      setMiseAmount(0);
+      // Refresh clients to display updated configuration
+      const apiClients = await api.getMyClients();
+      db.syncDataFromServer(apiClients);
+      setClients(apiClients);
+    } catch (err: any) {
+      setMiseError(err.message || 'Erreur lors de la configuration.');
+    } finally {
+      setIsMiseLoading(false);
+    }
+  };
 
   // Pre-fill daily amount when client is selected (DIRECTIVE 4)
   const openCollectModal = (client: Client) => {
@@ -94,12 +123,12 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
           setDailyAmount(fn.cotisationJournaliere);
           setAmount(fn.cotisationJournaliere);
         } else {
-          const acc = db.getAccounts().find(a => a.clientId === client.id && a.type === 'financement' && a.status !== 'solde');
+          const acc = db.getAccounts().find(a => a.clientId === client.id && (a.type === 'financement' || a.type === 'epargne') && a.status !== 'solde');
           setDailyAmount(acc?.dailyContribution || 0);
           setAmount(acc?.dailyContribution || 0);
         }
       } else {
-        const acc = db.getAccounts().find(a => a.clientId === client.id && a.type === 'financement' && a.status !== 'solde');
+        const acc = db.getAccounts().find(a => a.clientId === client.id && (a.type === 'financement' || a.type === 'epargne') && a.status !== 'solde');
         setDailyAmount(acc?.dailyContribution || 0);
         setAmount(acc?.dailyContribution || 0);
       }
@@ -156,11 +185,11 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
           dailyAmount = fn.cotisationJournaliere;
           nonApFinancingId = fn.id;
         } else {
-          const acc = db.getAccounts().find(a => a.clientId === selectedClient.id && a.type === 'financement' && a.status !== 'solde');
+          const acc = db.getAccounts().find(a => a.clientId === selectedClient.id && (a.type === 'financement' || a.type === 'epargne') && a.status !== 'solde');
           if (acc) { dailyAmount = acc.dailyContribution || 0; accountFinancingId = acc.id; }
         }
       } else {
-        const acc = db.getAccounts().find(a => a.clientId === selectedClient.id && a.type === 'financement' && a.status !== 'solde');
+        const acc = db.getAccounts().find(a => a.clientId === selectedClient.id && (a.type === 'financement' || a.type === 'epargne') && a.status !== 'solde');
         if (acc) { dailyAmount = acc.dailyContribution || 0; accountFinancingId = acc.id; }
       }
     }
@@ -215,9 +244,17 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
     if (accountFinancingId) {
       const updatedAccounts = db.getAccounts().map(a => {
         if (a.id !== accountFinancingId) return a;
-        const totalPaid = (a.totalPaid || 0) + amount;
-        const totalDue = a.totalDue || a.balance || 0;
-        return { ...a, totalPaid, balance: Math.max(0, totalDue - totalPaid), status: totalPaid >= totalDue ? 'solde' as const : 'actif' as const };
+        // For financement accounts: track totalPaid and compute remaining balance
+        if (a.type === 'financement') {
+          const totalPaid = (a.totalPaid || 0) + amount;
+          const totalDue = a.totalDue || a.balance || 0;
+          return { ...a, totalPaid, balance: Math.max(0, totalDue - totalPaid), status: totalPaid >= totalDue ? 'solde' as const : 'actif' as const };
+        }
+        // For epargne (savings) accounts: simply increase balance
+        if (a.type === 'epargne') {
+          return { ...a, balance: a.balance + amount };
+        }
+        return a;
       });
       db.saveAccounts(updatedAccounts);
     }
@@ -368,12 +405,19 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
                     <td className="px-4 py-3 font-medium text-slate-900">{c.name}</td>
                     <td className="px-4 py-3 text-slate-500">{c.phone}</td>
                     <td className="px-4 py-3 font-bold text-emerald-600">{c.savingsBalance.toLocaleString()} F</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 flex gap-2">
                       <button 
                         onClick={() => setViewClient(c)}
                         className="text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1"
                       >
                          Détails <ChevronRight className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => { const acc = db.getAccounts().find(a => a.clientId === c.id && a.type === 'epargne'); setMiseClient(c); setMiseAmount(acc?.dailyContribution ?? 0); setMiseError(''); }}
+                        className="p-1.5 rounded-lg border text-xs font-semibold bg-teal-100 text-teal-700 hover:bg-teal-200 border-teal-300"
+                        title="Configurer ou modifier la mise journalière"
+                      >
+                        <Wallet className="w-3.5 h-3.5" />
                       </button>
                     </td>
                   </tr>
@@ -636,6 +680,55 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
           </table>
         </div>
       </div>
+
+      {/* ── Modal : Mise journalière (tontine épargnants simples) ─────────── */}
+      {miseClient && (
+        <div className="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-teal-700 text-white">
+              <h3 className="font-semibold flex items-center gap-2">
+                <Wallet className="w-4 h-4" />
+                {db.getAccounts().find(a => a.clientId === miseClient.id && a.type === 'epargne' && a.status !== 'ferme' && (a.dailyContribution ?? 0) > 0)
+                  ? 'Modifier la mise journélière'
+                  : 'Configurer la mise journélière'}
+              </h3>
+              <button onClick={() => { setMiseClient(null); setMiseError(''); }} className="p-1 hover:bg-teal-600 rounded-full"><X className="w-4 h-4" /></button>
+            </div>
+            <form onSubmit={handleSetMiseJournaliere} className="p-5 space-y-4">
+              {miseError && <div className="p-3 text-sm rounded-xl bg-red-50 text-red-600 border border-red-200">{miseError}</div>}
+              <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl text-xs text-teal-800">
+                <strong>Tontine Épargnant :</strong> La première cotisation enregistrée pour ce client constituera un bénéfice de l'entreprise (case 1). Toutes les cotisations suivantes s'accumuleront dans son épargne.
+              </div>
+              <p className="text-sm text-slate-600">Client : <strong>{miseClient.name}</strong></p>
+              <label className="block space-y-1">
+                <span className="text-xs font-semibold text-slate-500">Montant journélier (F CFA) *</span>
+                <input
+                  type="number"
+                  required
+                  min={50}
+                  step={50}
+                  value={miseAmount || ''}
+                  onChange={e => setMiseAmount(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-teal-500"
+                  placeholder="Ex : 200"
+                />
+              </label>
+              {miseAmount > 0 && (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700">
+                  <strong>Récapitulatif :</strong> {miseAmount.toLocaleString()} F/jour · ~{(miseAmount * 30).toLocaleString()} F/mois
+                </div>
+              )}
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => { setMiseClient(null); setMiseError(''); }} className="px-4 py-2 border border-slate-200 text-slate-600 text-sm rounded-xl hover:bg-slate-50">Annuler</button>
+                <button type="submit" disabled={isMiseLoading || miseAmount <= 0} className="px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-xl hover:bg-teal-700 disabled:opacity-50 flex items-center gap-2">
+                  {isMiseLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Confirmer
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Collect Modal */}
       {selectedClient && (
