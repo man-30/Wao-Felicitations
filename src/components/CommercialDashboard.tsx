@@ -160,7 +160,7 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
     return result;
   };
 
-  const handleCollect = (e: React.FormEvent) => {
+  const handleCollect = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedClient || amount <= 0) return;
 
@@ -281,6 +281,15 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
       'Collecte Terrain',
       `Collecte journalière de ${amount} F (${numDays} case(s)) pour ${selectedClient.name} — synchronisation immédiate`
     );
+
+    // Synchronisation backend: persister la cotisation en base de données
+    // Non-bloquant: l'état local est déjà mis à jour pour un retour immédiat à l'UI
+    const clientIdForApi = selectedClient.id;
+    try {
+      await api.recordCotisation({ clientId: clientIdForApi, amount });
+    } catch (apiErr) {
+      console.error('[COMMERCIAL] Échec synchronisation cotisation vers le backend:', apiErr);
+    }
 
     setSelectedClient(null);
     setAmount(0);

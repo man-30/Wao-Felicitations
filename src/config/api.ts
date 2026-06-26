@@ -158,6 +158,13 @@ export const api = {
     return this.request<any[]>('/api/transactions');
   },
 
+  async recordCotisation(data: { clientId: string; amount: number; cycleDay?: number; cycleMonth?: number }) {
+    return this.request<any>('/api/cotisations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
   async createTransaction(data: any) {
     return this.request<any>('/api/transactions', {
       method: 'POST',

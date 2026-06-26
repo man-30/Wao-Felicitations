@@ -842,7 +842,7 @@ app.delete('/api/admin/bulk-delete-clients', authenticateToken, requireRole('adm
  * pour les clients de type "simple" (épargnants)
  * Rôles: admin, caissier
  */
-app.put('/api/clients/:clientId/mise-journaliere', authenticateToken, requireRole('admin', 'caissier'), async (req: Request, res: Response) => {
+app.put('/api/clients/:clientId/mise-journaliere', authenticateToken, requireRole('admin', 'caissier', 'commercial'), async (req: Request, res: Response) => {
   try {
     const { clientId } = req.params
     const { amount } = req.body
@@ -1441,7 +1441,21 @@ app.post('/api/cotisations', authenticateToken, requirePermission('record:cotisa
       if (!client) return res.status(404).json({ error: 'Client not found' })
       const account = await prisma.tontineAccount.findFirst({ where: { apprenant: { clientId: clientId } } })
       if (!account) {
-        // Retourner réponse simulée si pas de tontine account
+        // Épargnant simple sans compte tontine: mettre à jour savingsBalance + compte épargne
+        const savingsAcc = await prisma.account.findFirst({
+          where: { clientId, type: 'epargne', status: 'actif' },
+        })
+        await prisma.client.update({
+          where: { id: clientId },
+          data: { savingsBalance: { increment: new Decimal(amount) } },
+        })
+        if (savingsAcc) {
+          await prisma.account.update({
+            where: { id: savingsAcc.id },
+            data: { balance: { increment: new Decimal(amount) } },
+          })
+        }
+        await logRecordCotisation(req.user!.userId, req.user!.email, req.user!.role, clientId, amount, `sim-${Date.now()}`)
         return res.status(201).json({
           cotisation: { id: `sim-${Date.now()}`, client_id: clientId, amount: String(amount), cycle_id: cycleDay, status: 'validated', recorded_at: new Date() },
           message: 'Cotisation recorded',

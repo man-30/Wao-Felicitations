@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { User, Transaction, Expense, UserRole } from '../types';
 import { db } from '../localStorageDB';
+import api from '../config/api';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -20,6 +21,21 @@ export default function AdminDashboard({ currentUser }: AdminDashboardProps) {
   const [users, setUsers] = useState<User[]>(db.getUsers());
   const [transactions] = useState<Transaction[]>(db.getTransactions());
   const [expenses] = useState<Expense[]>(db.getExpenses());
+
+  // Synchronisation clients depuis le backend (polling 10s)
+  useEffect(() => {
+    const syncClients = async () => {
+      try {
+        const apiClients = await api.getClients();
+        db.syncDataFromServer(apiClients);
+      } catch {
+        // Silencieux: localStorage maintenu en cas d'erreur réseau
+      }
+    };
+    syncClients();
+    const interval = setInterval(syncClients, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Form states for new user
   const [name, setName] = useState('');

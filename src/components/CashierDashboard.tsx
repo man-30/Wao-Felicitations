@@ -49,7 +49,7 @@ export default function CashierDashboard({ currentUser }: CashierDashboardProps)
   } | null>(null);
   const [statsError, setStatsError] = useState('');
 
-  // Synchronisation temps réel — polling 3s
+  // Synchronisation temps réel — polling 3s localStorage + 10s API
   useEffect(() => {
     const interval = setInterval(() => {
       setTransactions(db.getTransactions());
@@ -57,6 +57,22 @@ export default function CashierDashboard({ currentUser }: CashierDashboardProps)
       setClients(db.getClients());
       setEmployeePayments(db.getEmployeePayments());
     }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Synchronisation clients depuis le backend (pour balances mises à jour par les commerciaux)
+  useEffect(() => {
+    const syncClientsFromBackend = async () => {
+      try {
+        const apiClients = await api.getClients();
+        db.syncDataFromServer(apiClients);
+        setClients(apiClients);
+      } catch {
+        // Silencieux: on garde les données localStorage en cas d'erreur
+      }
+    };
+    syncClientsFromBackend();
+    const interval = setInterval(syncClientsFromBackend, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -71,6 +87,9 @@ export default function CashierDashboard({ currentUser }: CashierDashboardProps)
     };
 
     loadStats();
+    // Polling toutes les 10s pour synchronisation temps réel avec les cotisations des commerciaux
+    const interval = setInterval(loadStats, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const refDate = useMemo(() => {

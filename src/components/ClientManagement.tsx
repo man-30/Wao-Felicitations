@@ -62,7 +62,7 @@ export default function ClientManagement({ currentUser }: Props) {
   useEffect(() => {
     const interval = setInterval(() => {
       if (!isScrolling) fetchClients();
-    }, 60000);
+    }, 10000); // 10 secondes pour synchronisation temps réel entre interfaces
     return () => clearInterval(interval);
   }, [isScrolling]);
 
