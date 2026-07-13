@@ -1,18 +1,17 @@
 import { useState } from 'react';
 import { User, UserRole } from '../types';
 import {
-  ArrowDownLeft,
   CalendarDays,
   ClipboardList,
   CreditCard,
   GraduationCap,
+  Landmark,
   LayoutDashboard,
   LogOut,
   ShieldCheck,
   ShoppingBag,
   UserCircle,
   Users,
-  Wallet,
   X,
 } from 'lucide-react';
 
@@ -37,14 +36,13 @@ export default function Sidebar({ currentUser, activeTab, setActiveTab, onLogout
         ];
       case 'caissier':
         return [
-          { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
+          { id: 'dashboard', label: 'Vue d\'ensemble', icon: LayoutDashboard },
           { id: 'clients', label: 'Clients', icon: Users },
           { id: 'accounts', label: 'Comptes', icon: CreditCard },
           { id: 'apprenants', label: 'Tontine Scolaire', icon: GraduationCap },
           { id: 'cotisations', label: 'Suivi Cotisations', icon: CalendarDays },
           { id: 'financements', label: 'Financement Biens', icon: ShoppingBag },
-          { id: 'deposits', label: 'Dépôts', icon: Wallet },
-          { id: 'withdrawals', label: 'Retraits', icon: ArrowDownLeft },
+          { id: 'caisse', label: 'Caisse', icon: Landmark },
           { id: 'audit', label: 'Audit', icon: ClipboardList },
         ];
       case 'commercial':

@@ -101,9 +101,7 @@ export default function ClientManagement({ currentUser }: Props) {
 
   // Delete
   const [deleteClient, setDeleteClient] = useState<Client | null>(null);
-  const [deleteCode, setDeleteCode] = useState('');
   const [deleteError, setDeleteError] = useState('');
-  const [deleteRequestId, setDeleteRequestId] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Migration
@@ -123,7 +121,7 @@ export default function ClientManagement({ currentUser }: Props) {
   const [financeLabel, setFinanceLabel] = useState('');
   const [transferAccount, setTransferAccount] = useState<Account | null>(null);
   const [transferAmount, setTransferAmount] = useState(0);
-  const [transferReason, setTransferReason] = useState('Transfert surplus remboursement → Épargne');
+  const [transferReason, setTransferReason] = useState('Transfert surplus remboursement → Actifs');
 
   const [msg, setMsg] = useState({ text: '', type: '' });
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -147,6 +145,9 @@ export default function ClientManagement({ currentUser }: Props) {
   const [bulkError, setBulkError] = useState('');
   const isAdmin = currentUser.role === 'admin';
   const isCashier = currentUser.role === 'caissier';
+  const accountLabel = (client?: Client | null) => (isCashier && client && client.type !== 'simple' ? 'compte courant' : 'compte épargne');
+  const accountLabelCap = (client?: Client | null) => (isCashier && client && client.type !== 'simple' ? 'Compte courant' : 'Compte épargne');
+  const assetLabel = (client?: Client | null) => (isCashier && client && client.type !== 'simple' ? 'actifs' : 'épargne');
 
   // ── Liste filtrée mémoisée (ne recalcule que si clients, searchTerm ou rôle changent) ──
   const filteredClients = useMemo(() => clients.filter(c => {
@@ -311,30 +312,12 @@ export default function ClientManagement({ currentUser }: Props) {
   };
 
   const openDelete = (c: Client) => {
-    const request = requestAdminCode({
-      requestedBy: currentUser,
-      actionType: 'client_delete',
-      targetId: c.id,
-      targetLabel: `Client ${c.name}`,
-      reason: 'Suppression fiche client',
-    });
     setDeleteClient(c);
-    setDeleteCode('');
-    setDeleteRequestId(request.id);
     setDeleteError('');
   };
 
-  const handleDelete = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleDelete = async () => {
     if (!deleteClient) return;
-
-    const validation = validateAndConsumeAdminCode({
-      code: deleteCode,
-      actionType: 'client_delete',
-      targetId: deleteClient.id,
-      usedBy: currentUser,
-    });
-    if (!validation.ok) { setDeleteError(validation.message || 'Code invalide.'); return; }
 
     setIsDeleting(true);
     try {
@@ -342,7 +325,7 @@ export default function ClientManagement({ currentUser }: Props) {
       const upd = clients.filter(c => c.id !== deleteClient.id);
       db.saveClients(upd);
       setClients(upd);
-      db.addLog(currentUser.id, currentUser.name, currentUser.role, 'Suppression Client', `Client ${deleteClient.name} (${deleteClient.id}) supprimé. Code: ${deleteCode}`);
+      db.addLog(currentUser.id, currentUser.name, currentUser.role, 'Suppression Client', `Client ${deleteClient.name} (${deleteClient.id}) supprimé après confirmation administrateur.`);
       setDeleteClient(null);
       setMsg({ text: `Client ${deleteClient.name} supprimé avec succès (et toutes ses données).`, type: 'success' });
     } catch (err: any) {
@@ -474,7 +457,7 @@ export default function ClientManagement({ currentUser }: Props) {
     if (!savingClient) return;
     const existing = getSavingsAccount(savingClient.id);
     if (existing) {
-      setMsg({ text: 'Ce client possède déjà un compte épargne.', type: 'error' });
+      setMsg({ text: `Ce client possède déjà un ${accountLabel(savingClient)}.`, type: 'error' });
       return;
     }
 
@@ -483,7 +466,7 @@ export default function ClientManagement({ currentUser }: Props) {
       clientId: savingClient.id,
       type: 'epargne',
       accountNumber: `EP-${new Date().getFullYear()}-${String(accounts.length + 1).padStart(4, '0')}`,
-      label: `Compte épargne - ${savingClient.name}`,
+      label: `${accountLabelCap(savingClient)} - ${savingClient.name}`,
       balance: savingClient.savingsBalance || 0,
       status: 'actif',
       createdBy: currentUser.id,
@@ -493,9 +476,9 @@ export default function ClientManagement({ currentUser }: Props) {
     const updated = [...accounts, account];
     db.saveAccounts(updated);
     setAccounts(updated);
-    db.addLog(currentUser.id, currentUser.name, currentUser.role, 'Ouverture Compte Épargne', `Compte ${account.accountNumber} ouvert pour ${savingClient.name}.`);
+    db.addLog(currentUser.id, currentUser.name, currentUser.role, `Ouverture ${accountLabelCap(savingClient)}`, `${accountLabelCap(savingClient)} ${account.accountNumber} ouvert pour ${savingClient.name}.`);
     setSavingClient(null);
-    setMsg({ text: 'Compte épargne ouvert avec succès.', type: 'success' });
+    setMsg({ text: `${accountLabelCap(savingClient)} ouvert avec succès.`, type: 'success' });
   };
 
   const getFinanceCalculation = () => {
@@ -606,7 +589,7 @@ export default function ClientManagement({ currentUser }: Props) {
     if (!viewClient || !transferAccount) return;
     const savingsAccount = getSavingsAccount(viewClient.id);
     if (!savingsAccount) {
-      setTransferError('Aucun compte épargne actif trouvé pour ce client.');
+      setTransferError(`Aucun ${accountLabel(viewClient)} actif trouvé pour ce client.`);
       return;
     }
     const available = transferAccount.residualBalance || 0;
@@ -652,8 +635,8 @@ export default function ClientManagement({ currentUser }: Props) {
       currentUser.id,
       currentUser.name,
       currentUser.role,
-      'Transfert Surplus → Épargne',
-      `${transferAmount.toLocaleString()} F transférés du compte financement ${transferAccount.accountNumber} vers le compte épargne ${savingsAccount.accountNumber} de ${viewClient.name}. Horodatage: ${nowDisplay}. Opérateur: ${currentUser.name}. Motif: ${transferReason}`,
+      `Transfert Surplus → ${assetLabel(viewClient)}`,
+      `${transferAmount.toLocaleString()} F transférés du compte financement ${transferAccount.accountNumber} vers le ${accountLabel(viewClient)} ${savingsAccount.accountNumber} de ${viewClient.name}. Horodatage: ${nowDisplay}. Opérateur: ${currentUser.name}. Motif: ${transferReason}`,
       `Surplus remboursement: ${(transferAccount.residualBalance || 0).toLocaleString()} F`,
       `Après transfert: ${Math.max(0, (transferAccount.residualBalance || 0) - transferAmount).toLocaleString()} F`
     );
@@ -661,8 +644,8 @@ export default function ClientManagement({ currentUser }: Props) {
     setTransferAccount(null);
     setTransferAmount(0);
     setTransferError('');
-    setTransferReason('Transfert surplus remboursement → Épargne');
-    setMsg({ text: `✅ ${transferAmount.toLocaleString()} F transférés avec succès vers le compte épargne ${savingsAccount.accountNumber}.`, type: 'success' });
+    setTransferReason('Transfert surplus remboursement → Actifs');
+    setMsg({ text: `✅ ${transferAmount.toLocaleString()} F transférés avec succès vers le ${accountLabel(viewClient)} ${savingsAccount.accountNumber}.`, type: 'success' });
   };
 
   return (
@@ -909,7 +892,7 @@ export default function ClientManagement({ currentUser }: Props) {
                 <th className="px-4 py-3 text-left font-semibold">Client</th>
                 <th className="px-4 py-3 text-left font-semibold">Type</th>
                 <th className="px-4 py-3 text-left font-semibold">Tél.</th>
-                <th className="px-4 py-3 text-left font-semibold">Épargne</th>
+                <th className="px-4 py-3 text-left font-semibold">{isCashier ? 'Actifs' : 'Épargne'}</th>
                 <th className="px-4 py-3 text-left font-semibold">Financement</th>
                 <th className="px-4 py-3 text-left font-semibold">Scolarité</th>
                 <th className="px-4 py-3 text-left font-semibold">Actions</th>
@@ -936,7 +919,7 @@ export default function ClientManagement({ currentUser }: Props) {
                       <div className="flex gap-1.5 flex-wrap">
                         <button onClick={() => setViewClient(c)} title="Consulter" className="p-1.5 rounded-lg bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 border border-slate-200"><Eye className="w-3.5 h-3.5" /></button>
                         {isCashier && <button onClick={() => openEdit(c)} title="Modifier (code admin)" className="p-1.5 rounded-lg bg-slate-100 hover:bg-amber-50 text-slate-600 hover:text-amber-600 border border-slate-200"><Pencil className="w-3.5 h-3.5" /></button>}
-                        {isAdmin && <button onClick={() => openDelete(c)} title="Supprimer (code admin)" className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200"><Trash2 className="w-3.5 h-3.5" /></button>}
+                        {isAdmin && <button onClick={() => openDelete(c)} title="Supprimer (confirmation popup)" className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200"><Trash2 className="w-3.5 h-3.5" /></button>}
                         {isCashier && c.type === 'apprenant' && <button onClick={() => setMigrateClient(c)} title="Changer établissement" className="p-1.5 rounded-lg bg-slate-100 hover:bg-purple-50 text-slate-600 hover:text-purple-600 border border-slate-200"><ArrowRightLeft className="w-3.5 h-3.5" /></button>}
                         {(isCashier || isAdmin) && (c.type === 'simple' || (c.type as string) === 'simple') && (
                           <button
@@ -989,26 +972,25 @@ export default function ClientManagement({ currentUser }: Props) {
         <div className="fixed inset-0 bg-slate-950/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
             <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-rose-900 text-white">
-              <h3 className="font-semibold flex items-center gap-2"><Lock className="w-4 h-4" /> Suppression sécurisée — Code Admin requis</h3>
+              <h3 className="font-semibold flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Suppression sécurisée — Confirmation requise</h3>
               <button onClick={() => setDeleteClient(null)} className="p-1 hover:bg-rose-800 rounded-full"><X className="w-4 h-4" /></button>
             </div>
-            <form onSubmit={handleDelete} className="p-5 space-y-4">
+            <div className="p-5 space-y-4">
               {deleteError && <div className="p-3 text-sm rounded-xl bg-red-50 text-red-600 border border-red-200">{deleteError}</div>}
               <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800">
                 <strong>⚠️ ATTENTION :</strong> Vous êtes sur le point de supprimer définitivement le client <strong>{deleteClient.name}</strong> et toutes ses données associées (comptes, transactions, dettes, etc.). Cette action est irréversible.
               </div>
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700">
-                <strong>Sécurité :</strong> Demande envoyée à l'admin. Référence: <span className="font-mono">{deleteRequestId}</span>. Le code généré est valable 10 minutes et utilisable une seule fois.
+                <strong>Confirmation :</strong> Cette suppression est exécutée directement après confirmation explicite de l'administrateur.
               </div>
-              <label className="block space-y-1"><span className="text-xs font-semibold text-slate-500">Code Admin *</span><input type="text" required className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500 font-mono" value={deleteCode} onChange={(e) => setDeleteCode(e.target.value.toUpperCase())} placeholder="ADM-ABC123" /></label>
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setDeleteClient(null)} className="px-4 py-2 border border-slate-200 text-slate-600 text-sm rounded-xl hover:bg-slate-50">Annuler</button>
-                <button type="submit" disabled={isDeleting} className="px-4 py-2 bg-rose-600 text-white text-sm font-semibold rounded-xl hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                <button type="button" onClick={handleDelete} disabled={isDeleting} className="px-4 py-2 bg-rose-600 text-white text-sm font-semibold rounded-xl hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
                   {isDeleting && <Loader2 className="w-4 h-4 animate-spin" />}
                   Confirmer la suppression
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
@@ -1066,7 +1048,7 @@ export default function ClientManagement({ currentUser }: Props) {
                 {/* KPIs */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                   <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-3">
-                    <p className="text-xs text-emerald-700 font-medium">Solde Épargne</p>
+                    <p className="text-xs text-emerald-700 font-medium">{isCashier ? 'Solde Actifs' : 'Solde Épargne'}</p>
                     <p className="mt-1 text-xl font-bold text-emerald-900">{Number(viewClient.savingsBalance || 0).toLocaleString()} F</p>
                     {savingsAcc && <p className="text-[10px] text-emerald-600 mt-0.5">{savingsAcc.accountNumber}</p>}
                   </div>
@@ -1077,7 +1059,7 @@ export default function ClientManagement({ currentUser }: Props) {
                     <p className={`mt-1 text-xl font-bold ${Number(viewClient.financingBalance || 0) >= 0 ? 'text-emerald-900' : 'text-rose-900'}`}>
                       {Number(viewClient.financingBalance || 0).toLocaleString()} F
                     </p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">{financeAccs.length} dossier(s) · {Number(viewClient.financingBalance || 0) < 0 ? 'Remboursement en cours' : Number(viewClient.financingBalance || 0) > 0 ? 'Transférable vers épargne' : 'Soldé'}</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">{financeAccs.length} dossier(s) · {Number(viewClient.financingBalance || 0) < 0 ? 'Remboursement en cours' : Number(viewClient.financingBalance || 0) > 0 ? `Transférable vers ${assetLabel(viewClient)}` : 'Soldé'}</p>
                   </div>
                   <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3">
                     <p className="text-xs text-slate-500 font-medium">Téléphone</p>
@@ -1103,15 +1085,15 @@ export default function ClientManagement({ currentUser }: Props) {
                       <div className="flex flex-wrap gap-2">
                         {!savingsAcc ? (
                           <button onClick={() => setSavingClient(viewClient)} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 shadow-sm shadow-emerald-200">
-                            <PiggyBank className="h-4 w-4" /> Ouvrir un compte épargne
+                            <PiggyBank className="h-4 w-4" /> {isCashier && viewClient.type !== 'simple' ? 'Ouvrir un compte courant' : 'Ouvrir un compte épargne'}
                           </button>
                         ) : (
                           <button
                             disabled
-                            title="Ce client possède déjà un compte épargne actif"
+                            title={isCashier && viewClient.type !== 'simple' ? 'Ce client possède déjà un compte courant actif' : 'Ce client possède déjà un compte épargne actif'}
                             className="inline-flex items-center gap-2 rounded-xl bg-slate-100 border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-400 cursor-not-allowed opacity-60"
                           >
-                            <PiggyBank className="h-4 w-4" /> Épargne active — {savingsAcc.accountNumber}
+                            <PiggyBank className="h-4 w-4" /> {isCashier && viewClient.type !== 'simple' ? 'Compte courant actif' : 'Épargne active'} — {savingsAcc.accountNumber}
                           </button>
                         )}
                         <button onClick={() => { setFinanceClient(viewClient); setFinanceAmount(0); setFinanceApport(0); setFinanceLabel(''); }} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 shadow-sm shadow-indigo-200">
@@ -1123,11 +1105,11 @@ export default function ClientManagement({ currentUser }: Props) {
                               setTransferAccount(surplusAccounts[0]);
                               setTransferAmount(0);
                               setTransferError('');
-                              setTransferReason('Transfert surplus remboursement → Épargne');
+                              setTransferReason('Transfert surplus remboursement → Actifs');
                             }}
                             className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 shadow-sm shadow-amber-200"
                           >
-                            <ArrowRight className="h-4 w-4" /> Transférer vers épargne
+                            <ArrowRight className="h-4 w-4" /> {`Transférer vers ${assetLabel(viewClient)}`}
                             <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{totalSurplus.toLocaleString()} F dispo.</span>
                           </button>
                         )}
@@ -1166,7 +1148,7 @@ export default function ClientManagement({ currentUser }: Props) {
                                 <div className="mt-2 flex items-center justify-between rounded-lg bg-amber-100 border border-amber-300 px-3 py-2">
                                   <div>
                                     <p className="text-xs font-bold text-amber-800">💰 Surplus transférable</p>
-                                    <p className="text-xs text-amber-700">Ce montant peut être transféré vers le compte épargne du client</p>
+                                    <p className="text-xs text-amber-700">{`Ce montant peut être transféré vers le ${accountLabel(viewClient)} du client`}</p>
                                   </div>
                                   <span className="font-bold text-amber-900 text-sm ml-3">{surplus.toLocaleString()} F</span>
                                 </div>
@@ -1340,15 +1322,15 @@ export default function ClientManagement({ currentUser }: Props) {
         <div className="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[60]">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
             <div className="bg-gradient-to-r from-emerald-700 to-emerald-600 p-4 text-white flex items-center justify-between">
-              <h3 className="font-bold flex items-center gap-2"><PiggyBank className="w-4 h-4" /> Ouvrir un compte épargne</h3>
+              <h3 className="font-bold flex items-center gap-2"><PiggyBank className="w-4 h-4" /> {`Ouvrir un ${accountLabel(savingClient)}`}</h3>
               <button onClick={() => setSavingClient(null)} className="p-1 hover:bg-white/10 rounded-full"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-5 space-y-4">
-              <p className="text-sm text-slate-600">Ouvrir un compte épargne officiel pour <strong>{savingClient.name}</strong>.</p>
+              <p className="text-sm text-slate-600">{`Ouvrir un ${accountLabel(savingClient)} officiel pour `}<strong>{savingClient.name}</strong>.</p>
               <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 space-y-2 text-sm">
                 <div className="flex justify-between"><span className="text-slate-600">Client</span><strong>{savingClient.name}</strong></div>
                 <div className="flex justify-between"><span className="text-slate-600">Solde initial</span><strong className="text-emerald-700">{savingClient.savingsBalance.toLocaleString()} F</strong></div>
-                <div className="flex justify-between"><span className="text-slate-600">Type</span><strong>Épargne (actif)</strong></div>
+                <div className="flex justify-between"><span className="text-slate-600">Type</span><strong>{isCashier && savingClient.type !== 'simple' ? 'Compte courant (actif)' : 'Épargne (actif)'}</strong></div>
               </div>
               <div className="flex justify-end gap-2">
                 <button onClick={() => setSavingClient(null)} className="px-4 py-2 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50">Annuler</button>
@@ -1432,8 +1414,8 @@ export default function ClientManagement({ currentUser }: Props) {
                     <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold">
                       <ArrowRight className="h-3.5 w-3.5" /> Directive 9 — Transfert surplus
                     </div>
-                    <h3 className="mt-2 text-xl font-bold">Transférer vers compte épargne</h3>
-                    <p className="mt-1 text-sm text-amber-100">Le surplus du remboursement est crédité uniquement sur l'épargne. Aucun autre compte n'est autorisé.</p>
+                    <h3 className="mt-2 text-xl font-bold">{`Transférer vers ${accountLabel(viewClient)}`}</h3>
+                    <p className="mt-1 text-sm text-amber-100">{`Le surplus du remboursement est crédité uniquement sur ${assetLabel(viewClient)}. Aucun autre compte n'est autorisé.`}</p>
                   </div>
                   <button onClick={() => { setTransferAccount(null); setTransferError(''); }} className="rounded-full bg-white/10 p-2 hover:bg-white/20 flex-shrink-0"><X className="h-4 w-4" /></button>
                 </div>
@@ -1456,7 +1438,7 @@ export default function ClientManagement({ currentUser }: Props) {
                     <p className="text-[10px] text-amber-600">{transferAccount.label}</p>
                   </div>
                   <div className={`rounded-2xl border p-4 ${savingsAcc ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
-                    <p className={`text-xs font-medium ${savingsAcc ? 'text-emerald-700' : 'text-slate-500'}`}>Compte destination (épargne)</p>
+                    <p className={`text-xs font-medium ${savingsAcc ? 'text-emerald-700' : 'text-slate-500'}`}>{`Compte destination (${assetLabel(viewClient)})`}</p>
                     <p className={`mt-1 text-lg font-bold ${savingsAcc ? 'text-emerald-900' : 'text-slate-400'}`}>
                       {savingsAcc ? `${viewClient.savingsBalance.toLocaleString()} F` : 'Aucun compte'}
                     </p>
@@ -1497,7 +1479,7 @@ export default function ClientManagement({ currentUser }: Props) {
                   <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-sm">
                     <p className="font-bold text-emerald-900 mb-2">✅ Aperçu après confirmation</p>
                     <div className="space-y-1 text-emerald-800">
-                      <div className="flex justify-between"><span>Compte épargne ({savingsAcc?.accountNumber})</span><strong>{afterSavings.toLocaleString()} F (+{transferAmount.toLocaleString()} F)</strong></div>
+                      <div className="flex justify-between"><span>{`${accountLabelCap(viewClient)} (${savingsAcc?.accountNumber})`}</span><strong>{afterSavings.toLocaleString()} F (+{transferAmount.toLocaleString()} F)</strong></div>
                       <div className="flex justify-between"><span>Surplus remboursement</span><strong>{afterTransfer.toLocaleString()} F (-{transferAmount.toLocaleString()} F)</strong></div>
                     </div>
                   </div>
@@ -1505,7 +1487,7 @@ export default function ClientManagement({ currentUser }: Props) {
 
                 {/* Règle rappel */}
                 <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600">
-                  ⚠️ Ce transfert est tracé dans l'historique avec horodatage et identité de l'opérateur. Le client peut ensuite retirer ce montant via son compte épargne selon la procédure habituelle de retrait en agence.
+                  {`⚠️ Ce transfert est tracé dans l'historique avec horodatage et identité de l'opérateur. Le client peut ensuite retirer ce montant via son ${accountLabel(viewClient)} selon la procédure habituelle de retrait en agence.`}
                 </div>
 
                 {/* Actions */}

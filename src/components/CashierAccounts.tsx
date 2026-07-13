@@ -5,6 +5,9 @@ import { CreditCard, Eye, Search, X } from 'lucide-react';
 
 interface Props { currentUser: User; }
 function fmt(v: number) { return new Intl.NumberFormat('fr-FR').format(Math.round(v)) + ' F'; }
+function accountLabelByClientType(type: Client['type']) {
+  return type === 'simple' ? 'Compte Épargne' : 'Compte courant';
+}
 
 export default function CashierAccounts(_props: Props) {
   const [clients] = useState<Client[]>(db.getClients());
@@ -47,7 +50,7 @@ export default function CashierAccounts(_props: Props) {
             <thead className="bg-slate-50 text-slate-600"><tr>
               <th className="px-4 py-3 text-left font-semibold">Client</th>
               <th className="px-4 py-3 text-left font-semibold">Type</th>
-              <th className="px-4 py-3 text-left font-semibold">Compte Épargne</th>
+              <th className="px-4 py-3 text-left font-semibold">Actifs</th>
               <th className="px-4 py-3 text-left font-semibold">Compte Financement</th>
               <th className="px-4 py-3 text-left font-semibold">Dette active</th>
               <th className="px-4 py-3 text-left font-semibold">Détails</th>
@@ -60,7 +63,12 @@ export default function CashierAccounts(_props: Props) {
                     <tr key={c.id} className="hover:bg-slate-50/60">
                       <td className="px-4 py-3"><p className="font-semibold text-slate-900">{c.name}</p><p className="text-xs text-slate-400">{commName(c.assignedCommercialId)}</p></td>
                       <td className="px-4 py-3 capitalize text-xs text-slate-600">{c.type}</td>
-                      <td className="px-4 py-3"><span className="rounded-xl bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700">{fmt(c.savingsBalance)}</span></td>
+                      <td className="px-4 py-3">
+                        <div className="space-y-1">
+                          <p className="text-[10px] text-slate-500 font-semibold uppercase">{accountLabelByClientType(c.type)}</p>
+                          <span className="rounded-xl bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700">{fmt(c.savingsBalance)}</span>
+                        </div>
+                      </td>
                       <td className="px-4 py-3"><span className="rounded-xl bg-indigo-50 px-3 py-1.5 text-sm font-semibold text-indigo-700">{fmt(c.financingBalance || 0)}</span></td>
                       <td className="px-4 py-3">{debt ? <><p className="font-medium text-slate-800 text-xs">{debt.schoolName}</p><p className="text-xs text-indigo-600">Reste: {fmt(debt.debtAmount - debt.paidAmount)}</p></> : <span className="text-slate-400 text-xs">—</span>}</td>
                       <td className="px-4 py-3"><button onClick={() => setViewClient(c)} className="p-1.5 rounded-lg bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 border border-slate-200"><Eye className="w-3.5 h-3.5" /></button></td>
@@ -83,9 +91,9 @@ export default function CashierAccounts(_props: Props) {
             <div className="p-5 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-2xl bg-emerald-50 p-4 border border-emerald-200">
-                  <p className="text-xs text-emerald-700 font-medium">Compte Épargne</p>
+                  <p className="text-xs text-emerald-700 font-medium">{accountLabelByClientType(viewClient.type)}</p>
                   <p className="text-2xl font-bold text-emerald-900 mt-1">{fmt(viewClient.savingsBalance)}</p>
-                  <p className="text-xs text-emerald-600 mt-2">Solde automatique des dépôts − retraits</p>
+                  <p className="text-xs text-emerald-600 mt-2">Solde des actifs clients (dépôts et cotisations applicables)</p>
                 </div>
                 <div className="rounded-2xl bg-indigo-50 p-4 border border-indigo-200">
                   <p className="text-xs text-indigo-700 font-medium">Compte Financement</p>

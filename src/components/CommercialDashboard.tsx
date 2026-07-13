@@ -57,6 +57,7 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
   const [notes, setNotes] = useState('');
   const [dailyAmount, setDailyAmount] = useState<number>(0); // Pre-filled daily amount (DIRECTIVE 4)
   const [searchTerm, setSearchTerm] = useState('');
+  const [clientListSearch, setClientListSearch] = useState('');
 
   // Mise journalière (daily contribution) configuration
   const [miseClient, setMiseClient] = useState<Client | null>(null);
@@ -69,6 +70,8 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
   // Stats
   const myApprovedTx = transactions.filter(t => t.collectedBy === currentUser.id && t.status === 'approved');
   const totalCollected = myApprovedTx.reduce((sum, t) => sum + t.amount, 0);
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayCollected = myApprovedTx.filter((t) => t.date === todayKey).reduce((sum, t) => sum + t.amount, 0);
 
   const pendingTx = transactions.filter(t => t.collectedBy === currentUser.id && t.status === 'pending');
   const pendingAmount = pendingTx.reduce((sum, t) => sum + t.amount, 0);
@@ -76,6 +79,10 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
   const filteredClients = clients.filter(c => 
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     c.phone.includes(searchTerm)
+  );
+
+  const filteredCardClients = clients.filter((c) =>
+    c.name.toLowerCase().includes(clientListSearch.toLowerCase()) || c.phone.includes(clientListSearch)
   );
 
   // Handler: configure/modify daily contribution (mise journalière)
@@ -228,17 +235,33 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
       });
     }
 
+    const remboursementAmount = actualTransactions
+      .filter((t) => t.allocation === 'remboursement')
+      .reduce((sum, t) => sum + t.amount, 0);
+    const beneficeAmount = actualTransactions
+      .filter((t) => t.allocation === 'benefice_societe')
+      .reduce((sum, t) => sum + t.amount, 0);
+
     const updatedTxs = [...transactions, ...actualTransactions];
     db.saveTransactions(updatedTxs);
     setTransactions(updatedTxs);
 
     // Immediate balance impact: cotisation rembourse financement si actif, sinon alimente l'épargne.
     if (tontineAccountId) {
-      const updatedTontines = db.getTontineAccounts().map(a => a.id === tontineAccountId ? { ...a, totalCotise: a.totalCotise + amount, totalJours: a.totalJours + numDays } : a);
+      const updatedTontines = db.getTontineAccounts().map(a => a.id === tontineAccountId ? {
+        ...a,
+        totalCotise: a.totalCotise + remboursementAmount,
+        totalBeneficeCases: (a.totalBeneficeCases || 0) + beneficeAmount,
+        totalJours: a.totalJours + numDays,
+      } : a);
       db.saveTontineAccounts(updatedTontines);
     }
     if (nonApFinancingId) {
-      const updatedFin = db.getFinancements().map(f => f.id === nonApFinancingId ? { ...f, totalCotise: f.totalCotise + amount, status: f.totalCotise + amount >= f.totalARembourser ? 'solde' as const : f.status } : f);
+      const updatedFin = db.getFinancements().map(f => f.id === nonApFinancingId ? {
+        ...f,
+        totalCotise: f.totalCotise + remboursementAmount,
+        status: f.totalCotise + remboursementAmount >= f.totalARembourser ? 'solde' as const : f.status,
+      } : f);
       db.saveFinancements(updatedFin);
     }
     if (accountFinancingId) {
@@ -246,13 +269,13 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
         if (a.id !== accountFinancingId) return a;
         // For financement accounts: track totalPaid and compute remaining balance
         if (a.type === 'financement') {
-          const totalPaid = (a.totalPaid || 0) + amount;
+          const totalPaid = (a.totalPaid || 0) + remboursementAmount;
           const totalDue = a.totalDue || a.balance || 0;
           return { ...a, totalPaid, balance: Math.max(0, totalDue - totalPaid), status: totalPaid >= totalDue ? 'solde' as const : 'actif' as const };
         }
         // For epargne (savings) accounts: simply increase balance
         if (a.type === 'epargne') {
-          return { ...a, balance: a.balance + amount };
+          return { ...a, balance: a.balance + remboursementAmount };
         }
         return a;
       });
@@ -264,13 +287,13 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
     const updClients = allClients.map(c => {
       if (c.id !== selectedClient.id) return c;
       if (!tontineAccountId && !nonApFinancingId && !accountFinancingId) {
-        // Pas de financement actif → l'argent va dans l'épargne
-        return { ...c, savingsBalance: c.savingsBalance + amount };
+        // Pas de financement actif: case 1 = bénéfice société, le reste alimente l'épargne.
+        return { ...c, savingsBalance: c.savingsBalance + remboursementAmount };
       }
-      const debts = c.schoolDebts.map(d => d.active ? { ...d, paidAmount: d.paidAmount + amount } : d);
+      const debts = c.schoolDebts.map(d => d.active ? { ...d, paidAmount: d.paidAmount + remboursementAmount } : d);
       // financingBalance est négatif (dette). On ajoute le montant cotisé pour réduire la dette.
       // Si ça dépasse 0, le surplus reste positif = transférable vers épargne.
-      return { ...c, schoolDebts: debts, financingBalance: c.financingBalance + amount };
+      return { ...c, schoolDebts: debts, financingBalance: c.financingBalance + remboursementAmount };
     });
     db.saveClients(updClients);
 
@@ -361,7 +384,9 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
         <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
           <div>
             <p className="text-slate-500 text-sm font-medium">Total Validé</p>
-            <h3 className="text-2xl font-bold text-slate-900 mt-1">{totalCollected.toLocaleString()} FCFA</h3>
+            <h3 className="text-2xl font-bold text-slate-900 mt-1">{todayCollected.toLocaleString()} FCFA</h3>
+            <p className="text-xs text-slate-500 mt-1">Aujourd'hui</p>
+            <p className="text-xs text-slate-600">Cumul: <strong>{totalCollected.toLocaleString()} FCFA</strong></p>
           </div>
           <div className="p-3 bg-green-50 rounded-lg text-green-600">
             <Award className="w-6 h-6" />
@@ -398,6 +423,16 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
              <h3 className="font-bold text-slate-800 flex items-center gap-2"><Users className="w-5 h-5 text-indigo-600" /> Liste de mes clients</h3>
              <button onClick={() => setShowClientList(false)} className="p-1 hover:bg-slate-100 rounded-full"><X className="w-4 h-4" /></button>
           </div>
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 bg-slate-50">
+            <Search className="w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              className="w-full bg-transparent text-sm focus:outline-none"
+              placeholder="Rechercher un client (nom ou téléphone)..."
+              value={clientListSearch}
+              onChange={(e) => setClientListSearch(e.target.value)}
+            />
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm border-collapse">
               <thead>
@@ -409,7 +444,7 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {clients.map(c => (
+                {filteredCardClients.map(c => (
                   <tr key={c.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3 font-medium text-slate-900">{c.name}</td>
                     <td className="px-4 py-3 text-slate-500">{c.phone}</td>
@@ -431,6 +466,11 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
                     </td>
                   </tr>
                 ))}
+                {filteredCardClients.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-6 text-center text-slate-400">Aucun client trouvé.</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -441,15 +481,16 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
       {viewClient && (() => {
         // Compute current month arrears + financing situation
         const nowDate = new Date();
+        const isEpargnant = viewClient.type === 'simple';
         const currentMonthKey = `${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, '0')}`;
         const calendarData = getCalendarData(viewClient.id);
         const currentDays = calendarData[currentMonthKey] || new Set<number>();
         const today = nowDate.getDate();
         const dayHistory: { day: number; status: 'paid' | 'missed' | 'benefit' | 'future' }[] = [];
         for (let d = 1; d <= 31; d++) {
-          if (currentDays.has(d)) dayHistory.push({ day: d, status: 'paid' });
+          if (d === 1) dayHistory.push({ day: d, status: 'benefit' });
+          else if (currentDays.has(d)) dayHistory.push({ day: d, status: 'paid' });
           else if (d < today) dayHistory.push({ day: d, status: 'missed' });
-          else if (d === 1) dayHistory.push({ day: d, status: 'benefit' });
           else dayHistory.push({ day: d, status: 'future' });
         }
         const missedThisMonth = dayHistory.filter(d => d.status === 'missed').length;
@@ -471,6 +512,9 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
         const resteDu = Math.max(0, totalFinance - totalRembourse);
         const aRegulariser = missedThisMonth * dailyAmt;
         const progressPct = totalFinance > 0 ? Math.min(100, Math.round((totalRembourse / totalFinance) * 100)) : 0;
+        const epargnantCotisations = transactions
+          .filter((t) => t.clientId === viewClient.id && t.status === 'approved' && t.type === 'cotisation')
+          .sort((a, b) => b.date.localeCompare(a.date));
 
         return (
           <div className="fixed inset-0 modal-overlay flex items-center justify-center p-3 sm:p-6 z-50">
@@ -486,6 +530,7 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
               <div className="p-5 space-y-5 modal-content">
 
                 {/* Situation de remboursement */}
+                {!isEpargnant && (
                 <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50 p-4 space-y-3">
                   <h4 className="text-sm font-bold text-indigo-900 uppercase tracking-wide">Situation de remboursement</h4>
                   <div className="grid grid-cols-3 gap-3">
@@ -511,9 +556,43 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
                     </div>
                   </div>
                 </div>
+                )}
+
+                {/* Détails spécifiques épargnant */}
+                {isEpargnant && (
+                  <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4 space-y-3">
+                    <h4 className="text-sm font-bold text-emerald-900 uppercase tracking-wide">Compte épargne</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-white p-3 border border-emerald-100">
+                        <p className="text-[10px] text-emerald-600 uppercase">Solde courant</p>
+                        <p className="mt-1 text-base font-bold text-emerald-800">{viewClient.savingsBalance.toLocaleString()} F</p>
+                      </div>
+                      <div className="rounded-xl bg-white p-3 border border-emerald-100">
+                        <p className="text-[10px] text-emerald-600 uppercase">Cotisations enregistrées</p>
+                        <p className="mt-1 text-base font-bold text-emerald-800">{epargnantCotisations.length}</p>
+                      </div>
+                    </div>
+                    <div className="rounded-xl bg-white border border-emerald-100 overflow-hidden">
+                      <div className="px-3 py-2 border-b border-emerald-100 text-xs font-semibold text-emerald-900">Historique des cotisations</div>
+                      <div className="max-h-48 overflow-y-auto divide-y divide-emerald-50">
+                        {epargnantCotisations.length === 0 ? (
+                          <p className="px-3 py-6 text-center text-xs text-slate-400">Aucune cotisation enregistrée.</p>
+                        ) : epargnantCotisations.map((t) => (
+                          <div key={t.id} className="px-3 py-2 flex items-center justify-between text-xs">
+                            <div>
+                              <p className="font-semibold text-slate-800">{t.date}</p>
+                              <p className="text-slate-500">{t.notes || 'Cotisation'}</p>
+                            </div>
+                            <p className="font-bold text-emerald-700">{t.amount.toLocaleString()} F</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Mois en cours */}
-                {!hasCotisationTracking && viewClient.type === 'non-apprenant' && (
+                {!isEpargnant && !hasCotisationTracking && viewClient.type === 'non-apprenant' && (
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
                     Ce non-apprenant n'a pas de financement actif. Le calendrier de cotisation ne s'applique pas.
                   </div>
@@ -562,7 +641,7 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
                 )}
 
                 {/* Régularisation */}
-                {hasCotisationTracking && missedThisMonth > 0 && (
+                {!isEpargnant && hasCotisationTracking && missedThisMonth > 0 && (
                   <div className="rounded-2xl border-2 border-rose-200 bg-rose-50 p-4 space-y-2">
                     <h4 className="text-sm font-bold text-rose-900 uppercase tracking-wide">À régulariser en caisse</h4>
                     <div className="flex items-center justify-between">
@@ -606,9 +685,12 @@ export default function CommercialDashboard({ currentUser }: CommercialDashboard
                               <div className="grid grid-cols-7 gap-1">
                                 {Array.from({ length: 31 }, (_, i) => i + 1).map(day => {
                                   const isChecked = days.has(day);
-                                  return (
-                                    <div key={day} className={`aspect-square flex items-center justify-center rounded text-[10px] font-bold ${isChecked ? 'bg-emerald-500 text-white' : 'bg-rose-100 text-rose-500'}`}>{day}</div>
-                                  );
+                                  const classes = day === 1
+                                    ? 'bg-amber-400 text-amber-950'
+                                    : isChecked
+                                      ? 'bg-emerald-500 text-white'
+                                      : 'bg-rose-100 text-rose-500';
+                                  return <div key={day} className={`aspect-square flex items-center justify-center rounded text-[10px] font-bold ${classes}`}>{day}</div>;
                                 })}
                               </div>
                             </div>

@@ -6,10 +6,8 @@ import AdminCockpit from './components/AdminCockpit';
 import AdminUsers from './components/AdminUsers';
 import ActionLogs from './components/ActionLogs';
 import ClientManagement from './components/ClientManagement';
-import SavingsManagement from './components/SavingsManagement';
-import WithdrawalManagement from './components/WithdrawalManagement';
 import CommercialDashboard from './components/CommercialDashboard';
-import CashierDashboard from './components/CashierDashboard';
+import CashierCaisse from './components/CashierCaisse';
 import CashierAccounts from './components/CashierAccounts';
 import CashierAudit from './components/CashierAudit';
 import ApprenantEnrollment from './components/ApprenantEnrollment';
@@ -48,16 +46,15 @@ export default function App() {
         return <AdminCockpit currentUser={user} />;
 
       case 'caissier':
-        if (activeTab === 'dashboard')   return <CashierDashboard currentUser={user} />;
+        if (activeTab === 'dashboard')   return <CashierCaisse currentUser={user} />;
         if (activeTab === 'clients')     return <ClientManagement currentUser={user} />;
         if (activeTab === 'accounts')    return <CashierAccounts currentUser={user} />;
         if (activeTab === 'apprenants')  return <ApprenantEnrollment currentUser={user} />;
         if (activeTab === 'cotisations') return <ApprenantSuivi currentUser={user} />;
         if (activeTab === 'financements')return <NonApprenantFinancement currentUser={user} />;
-        if (activeTab === 'deposits')    return <SavingsManagement currentUser={user} />;
-        if (activeTab === 'withdrawals') return <WithdrawalManagement currentUser={user} />;
+        if (activeTab === 'caisse')      return <CashierCaisse currentUser={user} />;
         if (activeTab === 'audit')       return <CashierAudit currentUser={user} />;
-        return <CashierDashboard currentUser={user} />;
+        return <CashierCaisse currentUser={user} />;
 
       case 'commercial':
         return <CommercialDashboard currentUser={user} />;
