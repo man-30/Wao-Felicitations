@@ -3,7 +3,7 @@ import api from '../config/api';
 import { db } from '../localStorageDB';
 import { EmployeePayment, Transaction, User, UserRole } from '../types';
 import {
-  Award, Briefcase, CheckCircle2, ClipboardCopy, Eye, HandCoins,
+  Award, Briefcase, CheckCircle2, ClipboardCopy, Eye,
   Pencil, Plus, ShieldCheck, ToggleLeft, ToggleRight, UserCheck, X,
 } from 'lucide-react';
 
@@ -35,11 +35,8 @@ export default function AdminUsers({ currentUser }: Props) {
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState<User | null>(null);
-  const [showPayment, setShowPayment] = useState<User | null>(null);
   const [showCode, setShowCode] = useState<{ user: User; code: string } | null>(null);
   const [showDetail, setShowDetail] = useState<User | null>(null);
-  const [detailPayAmount, setDetailPayAmount] = useState(0);
-  const [detailPayReason, setDetailPayReason] = useState('');
 
   // Create form
   const [createName, setCreateName] = useState('');
@@ -52,10 +49,6 @@ export default function AdminUsers({ currentUser }: Props) {
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editZone, setEditZone] = useState('');
-
-  // Payment form
-  const [payAmount, setPayAmount] = useState(0);
-  const [payReason, setPayReason] = useState('');
 
   const [feedback, setFeedback] = useState('');
 
@@ -123,24 +116,6 @@ export default function AdminUsers({ currentUser }: Props) {
     setFeedback(`✓ ${user.name} ${user.isActive === false ? 'réactivé' : 'désactivé'}.`);
   };
 
-  const handlePosition = () => {
-    if (!showPayment || payAmount <= 0) {
-      setFeedback('Montant invalide.'); return;
-    }
-    const newPayment: EmployeePayment = {
-      id: 'pay_' + Date.now(),
-      employeeId: showPayment.id, employeeName: showPayment.name, employeeRole: showPayment.role,
-      amount: payAmount, reason: payReason || undefined,
-      status: 'pending', initiatedAt: new Date().toISOString(),
-      initiatedBy: currentUser.id, initiatedByName: currentUser.name,
-    };
-    const updated = [newPayment, ...payments];
-    db.saveEmployeePayments(updated); setPayments(updated);
-    db.addLog(currentUser.id, currentUser.name, currentUser.role, 'Paiement Positionné', `${fmt(payAmount)} positionné pour ${showPayment.name}`);
-    setShowPayment(null); setPayAmount(0); setPayReason('');
-    setFeedback(`✓ Paiement de ${fmt(payAmount)} positionné pour ${showPayment.name}. Le caissier a été notifié.`);
-  };
-
   const generateCode = (user: User) => {
     const code = `EDIT-${user.id.toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
     setShowCode({ user, code });
@@ -158,7 +133,7 @@ export default function AdminUsers({ currentUser }: Props) {
               <Briefcase className="h-3.5 w-3.5" /> Gestion RH
             </div>
             <h1 className="mt-2 text-3xl font-bold tracking-tight">Personnel & Performances</h1>
-            <p className="mt-1 text-sm text-slate-300">Gérez les employés, suivez leurs performances, positionnez leurs paiements et générez les codes d'édition.</p>
+            <p className="mt-1 text-sm text-slate-300">Gérez les employés, suivez leurs performances et générez les codes d'édition.</p>
           </div>
           <button onClick={() => setShowCreate(true)} className="inline-flex items-center gap-2 rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-600 shadow-lg">
             <Plus className="h-4 w-4" /> Nouvel employé
@@ -227,7 +202,7 @@ export default function AdminUsers({ currentUser }: Props) {
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1.5">
                         <button
-                          onClick={() => { setShowDetail(user); setDetailPayAmount(0); setDetailPayReason(''); }}
+                          onClick={() => setShowDetail(user)}
                           title="Voir détails"
                           className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200"
                         >
@@ -317,34 +292,7 @@ export default function AdminUsers({ currentUser }: Props) {
         </div>
       )}
 
-      {/* Modal Paiement */}
-      {showPayment && (
-        <div className="fixed inset-0 modal-overlay flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg modal-container">
-            <div className="bg-gradient-to-r from-emerald-700 to-amber-600 p-4 text-white flex items-center justify-between modal-footer">
-              <h3 className="font-bold flex items-center gap-2"><HandCoins className="h-4 w-4" /> Positionner un paiement</h3>
-              <button onClick={() => setShowPayment(null)}><X className="h-4 w-4" /></button>
-            </div>
-            <div className="p-5 space-y-4 modal-content">
-              <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-sm">
-                <p><strong>Bénéficiaire :</strong> {showPayment.name}</p>
-                <p className="text-xs text-slate-500 capitalize mt-0.5">{showPayment.role} · {showPayment.zone}</p>
-              </div>
-              <label className="block space-y-1"><span className="text-xs font-semibold text-slate-500">Montant à remettre (FCFA) *</span><input type="number" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-emerald-500" value={payAmount || ''} onChange={e => setPayAmount(Number(e.target.value))} placeholder="Ex: 20000" /></label>
-              <label className="block space-y-1"><span className="text-xs font-semibold text-slate-500">Motif / commentaire</span><input className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-emerald-500" value={payReason} onChange={e => setPayReason(e.target.value)} placeholder="Prime, avance, remboursement..." /></label>
-              <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800">
-                Le caissier recevra cette notification dans son espace <strong>Paiements</strong> et devra le marquer comme traité une fois remis.
-              </div>
-            </div>
-            <div className="p-4 border-t border-slate-100 flex justify-end gap-2 modal-footer">
-              <button onClick={() => setShowPayment(null)} className="px-4 py-2 border border-slate-200 rounded-xl text-sm">Annuler</button>
-              <button onClick={handlePosition} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold">Positionner</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Code */}
+      {/* Modal Code */}}
       {showCode && (
         <div className="fixed inset-0 modal-overlay flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md modal-container">
@@ -370,29 +318,6 @@ export default function AdminUsers({ currentUser }: Props) {
         const empPays = employeePayments(showDetail.id);
         const processedPays = empPays.filter(p => p.status === 'processed');
         const totalReceived = processedPays.reduce((s, p) => s + p.amount, 0);
-
-        const handleDetailPayment = () => {
-          if (detailPayAmount <= 0) { setFeedback('Montant invalide.'); return; }
-          const newPayment: EmployeePayment = {
-            id: 'pay_' + Date.now(),
-            employeeId: showDetail.id,
-            employeeName: showDetail.name,
-            employeeRole: showDetail.role,
-            amount: detailPayAmount,
-            reason: detailPayReason || undefined,
-            status: 'pending',
-            initiatedAt: new Date().toISOString(),
-            initiatedBy: currentUser.id,
-            initiatedByName: currentUser.name,
-          };
-          const updated = [newPayment, ...payments];
-          db.saveEmployeePayments(updated);
-          setPayments(updated);
-          db.addLog(currentUser.id, currentUser.name, currentUser.role, 'Paiement Positionné', `${fmt(detailPayAmount)} positionné pour ${showDetail.name}`);
-          setDetailPayAmount(0);
-          setDetailPayReason('');
-          setFeedback(`✓ Paiement de ${fmt(detailPayAmount)} positionné pour ${showDetail.name}.`);
-        };
 
         return (
           <div className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-6 overflow-y-auto" style={{ background: 'rgba(15,23,42,0.65)', backdropFilter: 'blur(4px)' }}>
@@ -479,48 +404,6 @@ export default function AdminUsers({ currentUser }: Props) {
                     ))}
                   </div>
                 </div>
-
-                {/* Formulaire de positionnement de paiement */}
-                {showDetail.role !== 'admin' && (
-                  <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-5">
-                    <div className="flex items-start gap-3 mb-4">
-                      <div className="rounded-xl bg-emerald-600 p-2 text-white flex-shrink-0">
-                        <HandCoins className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-emerald-950">Positionner un paiement</h4>
-                        <p className="text-xs text-emerald-700 mt-0.5">Le caissier sera notifié automatiquement.</p>
-                      </div>
-                    </div>
-                    <div className="grid gap-3">
-                      <label className="block space-y-1">
-                        <span className="text-xs font-semibold text-emerald-800">Montant à remettre (FCFA) *</span>
-                        <input
-                          type="number"
-                          className="w-full px-3 py-2.5 border border-emerald-200 rounded-xl text-sm outline-none focus:border-emerald-500 bg-white"
-                          value={detailPayAmount || ''}
-                          onChange={e => setDetailPayAmount(Number(e.target.value))}
-                          placeholder="Ex: 20000"
-                        />
-                      </label>
-                      <label className="block space-y-1">
-                        <span className="text-xs font-semibold text-emerald-800">Motif / commentaire</span>
-                        <input
-                          className="w-full px-3 py-2.5 border border-emerald-200 rounded-xl text-sm outline-none focus:border-emerald-500 bg-white"
-                          value={detailPayReason}
-                          onChange={e => setDetailPayReason(e.target.value)}
-                          placeholder="Prime, avance, remboursement transport..."
-                        />
-                      </label>
-                      <button
-                        onClick={handleDetailPayment}
-                        className="w-full py-2.5 bg-emerald-600 text-white font-semibold rounded-xl text-sm hover:bg-emerald-700 flex items-center justify-center gap-2"
-                      >
-                        <HandCoins className="h-4 w-4" /> Valider et notifier le caissier
-                      </button>
-                    </div>
-                  </div>
-                )}
 
                 {/* Actions rapides */}
                 <div className="flex flex-wrap gap-2">

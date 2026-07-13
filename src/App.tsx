@@ -8,17 +8,13 @@ import ActionLogs from './components/ActionLogs';
 import ClientManagement from './components/ClientManagement';
 import SavingsManagement from './components/SavingsManagement';
 import WithdrawalManagement from './components/WithdrawalManagement';
-import ProductsAndCharges from './components/ProductsAndCharges';
 import CommercialDashboard from './components/CommercialDashboard';
 import CashierDashboard from './components/CashierDashboard';
-import CashierCaisse from './components/CashierCaisse';
 import CashierAccounts from './components/CashierAccounts';
 import CashierAudit from './components/CashierAudit';
 import ApprenantEnrollment from './components/ApprenantEnrollment';
 import ApprenantSuivi from './components/ApprenantSuivi';
 import NonApprenantFinancement from './components/NonApprenantFinancement';
-import CashierPayments from './components/CashierPayments';
-import InsuranceFundManagement from './components/InsuranceFundManagement';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(() => {
@@ -59,11 +55,7 @@ export default function App() {
         if (activeTab === 'cotisations') return <ApprenantSuivi currentUser={user} />;
         if (activeTab === 'financements')return <NonApprenantFinancement currentUser={user} />;
         if (activeTab === 'deposits')    return <SavingsManagement currentUser={user} />;
-        if (activeTab === 'payments')    return <CashierPayments currentUser={user} />;
         if (activeTab === 'withdrawals') return <WithdrawalManagement currentUser={user} />;
-        if (activeTab === 'expenses')    return <ProductsAndCharges currentUser={user} />;
-        if (activeTab === 'insurance')   return <InsuranceFundManagement currentUser={user} />;
-        if (activeTab === 'caisse')      return <CashierCaisse currentUser={user} />;
         if (activeTab === 'audit')       return <CashierAudit currentUser={user} />;
         return <CashierDashboard currentUser={user} />;
 

@@ -2,7 +2,6 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { db } from '../localStorageDB';
 import { ActionLog, AdminCodeRequest, Client, EmployeePayment, Expense, Transaction, User, UserRole } from '../types';
 import { actionTypeLabel, generateAdminCode as generateSensitiveCode, refreshAdminCodeRequests } from '../adminCodes';
-import InsuranceFundCard from './InsuranceFundCard';
 import { api } from '../config/api';
 import {
   AlertTriangle,
@@ -16,7 +15,6 @@ import {
   Copy,
   Download,
   FileDown,
-  HandCoins,
   LineChart,
   RefreshCw,
   Search,
@@ -151,8 +149,6 @@ export default function AdminCockpit({ currentUser }: AdminCockpitProps) {
   const [createEmail, setCreateEmail] = useState('');
   const [createPassword, setCreatePassword] = useState('');
   const [createZone, setCreateZone] = useState('');
-  const [paymentAmount, setPaymentAmount] = useState<number>(0);
-  const [paymentReason, setPaymentReason] = useState('');
   const [feedback, setFeedback] = useState('');
   const [isWiping, setIsWiping] = useState(false);
   const [showWipeConfirm, setShowWipeConfirm] = useState(false);
@@ -466,45 +462,6 @@ export default function AdminCockpit({ currentUser }: AdminCockpitProps) {
     setFeedback(`Compte ${newUser.role} créé avec succès.`);
   };
 
-  const handlePositionPayment = () => {
-    if (!selectedUser || selectedUser.role === 'admin') {
-      setFeedback('Sélectionnez un employé éligible.');
-      return;
-    }
-
-    if (paymentAmount <= 0) {
-      setFeedback('Le montant à remettre doit être supérieur à 0.');
-      return;
-    }
-
-    const payment: EmployeePayment = {
-      id: 'pay_' + Date.now() + Math.random().toString(36).slice(2, 6),
-      employeeId: selectedUser.id,
-      employeeName: selectedUser.name,
-      employeeRole: selectedUser.role,
-      amount: paymentAmount,
-      reason: paymentReason || undefined,
-      status: 'pending',
-      initiatedAt: new Date().toISOString(),
-      initiatedBy: currentUser.id,
-      initiatedByName: currentUser.name,
-    };
-
-    const updated = [payment, ...db.getEmployeePayments()];
-    db.saveEmployeePayments(updated);
-    setEmployeePayments(updated);
-    db.addLog(
-      currentUser.id,
-      currentUser.name,
-      currentUser.role,
-      'Paiement Employé Positionné',
-      `Paiement de ${formatMoney(paymentAmount)} positionné pour ${selectedUser.name}${paymentReason ? ` (${paymentReason})` : ''}.`,
-    );
-    setPaymentAmount(0);
-    setPaymentReason('');
-    setFeedback(`Paiement positionné pour ${selectedUser.name}. Le caissier a été notifié dans l'onglet Paiements.`);
-  };
-
   const handleWipeData = async () => {
     setIsWiping(true);
     try {
@@ -669,9 +626,6 @@ export default function AdminCockpit({ currentUser }: AdminCockpitProps) {
           );
         })}
       </section>
-
-      {/* Caisse Commune Assurance — temps réel */}
-      <InsuranceFundCard variant="full" />
 
       <section className="grid gap-6 xl:grid-cols-[1.6fr_0.9fr]">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -1134,43 +1088,6 @@ export default function AdminCockpit({ currentUser }: AdminCockpitProps) {
                 <div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs text-slate-500">Zone</p><p className="font-semibold text-slate-900">{selectedUser.zone || 'N/A'}</p></div>
               </div>
             </div>
-            {selectedUser.role !== 'admin' && (
-              <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                <div className="flex items-start gap-3">
-                  <div className="rounded-xl bg-[#228B22] p-2 text-white">
-                    <HandCoins className="h-4 w-4" />
-                  </div>
-                  <div className="flex-1 space-y-3">
-                    <div>
-                      <p className="text-sm font-semibold text-emerald-950">Positionner un paiement pour le caissier</p>
-                      <p className="mt-1 text-xs text-emerald-700">Le caissier recevra cette notification dans son espace Paiements.</p>
-                    </div>
-                    <label className="block space-y-1 text-sm">
-                      <span className="text-xs font-semibold text-emerald-700">Montant à remettre</span>
-                      <input
-                        type="number"
-                        value={paymentAmount || ''}
-                        onChange={(event) => setPaymentAmount(Number(event.target.value))}
-                        className="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 outline-none focus:border-emerald-600"
-                        placeholder="Ex: 20000"
-                      />
-                    </label>
-                    <label className="block space-y-1 text-sm">
-                      <span className="text-xs font-semibold text-emerald-700">Motif / commentaire</span>
-                      <input
-                        value={paymentReason}
-                        onChange={(event) => setPaymentReason(event.target.value)}
-                        className="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 outline-none focus:border-emerald-600"
-                        placeholder="Prime, avance, remboursement transport..."
-                      />
-                    </label>
-                    <button onClick={handlePositionPayment} className="inline-flex items-center gap-2 rounded-xl bg-[#228B22] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1a6d1a]">
-                      <HandCoins className="h-4 w-4" /> Valider et notifier le caissier
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
             <div className="mt-5 flex flex-wrap gap-2">
               <button onClick={() => handleGenerateEditionCode(selectedUser)} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"><Copy className="h-4 w-4" /> Générer code</button>
               <button onClick={() => handleToggleActive(selectedUser)} className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200">
