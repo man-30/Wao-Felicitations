@@ -1785,6 +1785,25 @@ app.post('/api/validation/cotisation-account-constraint', authenticateToken, req
 })
 
 // ───────────────────────────────────────────────────────────────────────────
+// SERVE FRONTEND (dist/ built by Vite)
+// Must come AFTER all /api routes
+// ───────────────────────────────────────────────────────────────────────────
+
+import { existsSync } from 'fs'
+
+const distPath = join(__dirname, 'dist')
+if (existsSync(distPath)) {
+  app.use(express.static(distPath))
+  // SPA fallback — all non-API routes return index.html
+  app.get('*', (_req: Request, res: Response) => {
+    res.sendFile(join(distPath, 'index.html'))
+  })
+  console.log(`[STATIC] Serving frontend from ${distPath}`)
+} else {
+  console.warn('[STATIC] dist/ not found — frontend not served. Run: npm run build')
+}
+
+// ───────────────────────────────────────────────────────────────────────────
 // ERROR HANDLING
 // ───────────────────────────────────────────────────────────────────────────
 
