@@ -292,7 +292,7 @@ export default function AdminUsers({ currentUser }: Props) {
         </div>
       )}
 
-      {/* Modal Code */}}
+      {/* Modal Code */}
       {showCode && (
         <div className="fixed inset-0 modal-overlay flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md modal-container">
