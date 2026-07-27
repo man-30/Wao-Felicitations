@@ -48,7 +48,7 @@ export default function CashierCaisse(_props: Props) {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-slate-800">Caisse Tontine (MVP)</h2>
+        <h2 className="text-2xl font-bold text-slate-800">Caisse Tontine</h2>
         <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-semibold rounded-full border border-indigo-200 flex items-center gap-1"><Landmark className="w-3 h-3" /> Cotisations uniquement</span>
       </div>
 
@@ -56,7 +56,7 @@ export default function CashierCaisse(_props: Props) {
       <div className="rounded-3xl bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-900 p-6 text-white shadow-xl">
         <p className="text-sm text-indigo-200 mb-1">Total cumulé des cotisations journalières</p>
         <h1 className="text-4xl font-bold text-white">{fmt(totalCotisations)}</h1>
-        <p className="text-xs text-slate-400 mt-2">Périmètre MVP: flux tontine validés (type cotisation).</p>
+        <p className="text-xs text-slate-400 mt-2">Flux tontine validés (type cotisation).</p>
       </div>
 
       {/* KPIs */}

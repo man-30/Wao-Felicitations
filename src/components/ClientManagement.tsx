@@ -893,8 +893,8 @@ export default function ClientManagement({ currentUser }: Props) {
                 <th className="px-4 py-3 text-left font-semibold">Type</th>
                 <th className="px-4 py-3 text-left font-semibold">Tél.</th>
                 <th className="px-4 py-3 text-left font-semibold">{isCashier ? 'Actifs' : 'Épargne'}</th>
-                <th className="px-4 py-3 text-left font-semibold">Financement</th>
-                <th className="px-4 py-3 text-left font-semibold">Scolarité</th>
+                <th className="px-4 py-3 text-left font-semibold">{isCashier ? 'Passifs' : 'Financement'}</th>
+                <th className="px-4 py-3 text-left font-semibold">{isCashier ? 'Dette en cours' : 'Scolarité'}</th>
                 <th className="px-4 py-3 text-left font-semibold">Actions</th>
               </tr>
             </thead>
@@ -903,18 +903,86 @@ export default function ClientManagement({ currentUser }: Props) {
                 <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">Aucun client trouvé.</td></tr>
               ) : filteredClients.map(c => {
                 const schoolDebts = c.schoolDebts || [];
-                const debt = schoolDebts.find(d => d.active);
                 const savingsBalance = Number(c.savingsBalance || 0);
                 const financingBalance = Number(c.financingBalance || 0);
                 
+                const activeSchoolDebt = schoolDebts.find(d => d.active);
+                const activeFinancingAcc = getFinancingAccounts(c.id).find(a => a.status === 'actif');
+
+                const debt = activeSchoolDebt;
+                const hasActiveFinancing = isCashier && (!!activeSchoolDebt || !!activeFinancingAcc) && financingBalance < 0;
+
+                let debtRemaining = 0;
+                if (hasActiveFinancing) {
+                  if (c.type === 'apprenant') {
+                    if (activeSchoolDebt) {
+                      debtRemaining = Number(activeSchoolDebt.debtAmount || 0) - Number(activeSchoolDebt.paidAmount || 0);
+                    } else if (activeFinancingAcc) {
+                      debtRemaining = Number(activeFinancingAcc.totalDue || 0) - Number(activeFinancingAcc.totalPaid || 0);
+                    } else {
+                      debtRemaining = Math.abs(financingBalance);
+                    }
+                  } else {
+                    // Non-apprenant
+                    if (activeFinancingAcc) {
+                      debtRemaining = Number(activeFinancingAcc.totalDue || 0) - Number(activeFinancingAcc.totalPaid || 0);
+                    } else {
+                      debtRemaining = Math.abs(financingBalance);
+                    }
+                  }
+                }
+
                 return (
                   <tr key={c.id} className="hover:bg-slate-50/60">
                     <td className="px-4 py-3"><p className="font-semibold text-slate-900">{c.name || 'Sans nom'}</p><p className="text-xs text-slate-400">Zone: {commName(c.assignedCommercialId)}</p></td>
                     <td className="px-4 py-3">{typeBadge(c.type)}</td>
                     <td className="px-4 py-3 text-slate-500">{c.phone || '—'}</td>
                     <td className="px-4 py-3 font-semibold text-emerald-600">{savingsBalance.toLocaleString()} F</td>
-                    <td className={`px-4 py-3 font-semibold ${financingBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{financingBalance.toLocaleString()} F</td>
-                    <td className="px-4 py-3">{debt ? <><p className="font-medium text-slate-800">{debt.schoolName}</p><p className="text-xs text-indigo-600">Reste: {(Number(debt.debtAmount || 0) - Number(debt.paidAmount || 0)).toLocaleString()} F</p></> : <span className="text-slate-400 text-xs">—</span>}</td>
+                    <td className="px-4 py-3 font-semibold">
+                      {isCashier ? (
+                        hasActiveFinancing ? (
+                          <span className={financingBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                            {financingBalance.toLocaleString()} F
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-xs">—</span>
+                        )
+                      ) : (
+                        <span className={financingBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                          {financingBalance.toLocaleString()} F
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {isCashier ? (
+                        hasActiveFinancing && debtRemaining > 0 ? (
+                          <div className="space-y-0.5">
+                            {c.type === 'apprenant' && activeSchoolDebt && (
+                              <p className="font-medium text-slate-800 text-xs">{activeSchoolDebt.schoolName}</p>
+                            )}
+                            {c.type === 'non-apprenant' && activeFinancingAcc && (
+                              <p className="font-medium text-slate-800 text-xs">{activeFinancingAcc.label}</p>
+                            )}
+                            <p className="text-xs text-indigo-600 font-semibold">
+                              Reste: {debtRemaining.toLocaleString()} F
+                            </p>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-xs">—</span>
+                        )
+                      ) : (
+                        debt ? (
+                          <>
+                            <p className="font-medium text-slate-800">{debt.schoolName}</p>
+                            <p className="text-xs text-indigo-600">
+                              Reste: {(Number(debt.debtAmount || 0) - Number(debt.paidAmount || 0)).toLocaleString()} F
+                            </p>
+                          </>
+                        ) : (
+                          <span className="text-slate-400 text-xs">—</span>
+                        )
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1.5 flex-wrap">
                         <button onClick={() => setViewClient(c)} title="Consulter" className="p-1.5 rounded-lg bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 border border-slate-200"><Eye className="w-3.5 h-3.5" /></button>

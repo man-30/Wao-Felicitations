@@ -1795,7 +1795,7 @@ const distPath = join(__dirname, 'dist')
 if (existsSync(distPath)) {
   app.use(express.static(distPath))
   // SPA fallback — all non-API routes return index.html
-  app.get('*', (_req: Request, res: Response) => {
+  app.get('/*splat', (_req: Request, res: Response) => {
     res.sendFile(join(distPath, 'index.html'))
   })
   console.log(`[STATIC] Serving frontend from ${distPath}`)
