@@ -37,8 +37,7 @@ export default function Sidebar({ currentUser, activeTab, setActiveTab, onLogout
       case 'caissier':
         return [
           { id: 'dashboard', label: 'Vue d\'ensemble', icon: LayoutDashboard },
-          { id: 'clients', label: 'Clients', icon: Users },
-          { id: 'accounts', label: 'Comptes', icon: CreditCard },
+          { id: 'clients', label: 'Clients & Comptes', icon: Users },
           { id: 'apprenants', label: 'Tontine Scolaire', icon: GraduationCap },
           { id: 'cotisations', label: 'Suivi Cotisations', icon: CalendarDays },
           { id: 'financements', label: 'Financement Biens', icon: ShoppingBag },

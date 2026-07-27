@@ -8,7 +8,6 @@ import ActionLogs from './components/ActionLogs';
 import ClientManagement from './components/ClientManagement';
 import CommercialDashboard from './components/CommercialDashboard';
 import CashierCaisse from './components/CashierCaisse';
-import CashierAccounts from './components/CashierAccounts';
 import CashierAudit from './components/CashierAudit';
 import ApprenantEnrollment from './components/ApprenantEnrollment';
 import ApprenantSuivi from './components/ApprenantSuivi';
@@ -48,7 +47,6 @@ export default function App() {
       case 'caissier':
         if (activeTab === 'dashboard')   return <CashierCaisse currentUser={user} />;
         if (activeTab === 'clients')     return <ClientManagement currentUser={user} />;
-        if (activeTab === 'accounts')    return <CashierAccounts currentUser={user} />;
         if (activeTab === 'apprenants')  return <ApprenantEnrollment currentUser={user} />;
         if (activeTab === 'cotisations') return <ApprenantSuivi currentUser={user} />;
         if (activeTab === 'financements')return <NonApprenantFinancement currentUser={user} />;

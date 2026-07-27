@@ -1,0 +1,42 @@
+
+> react-vite-tailwind@0.0.0 backend:dev
+> npx tsx backend-express-complete.ts
+
+◇ injected env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+◇ injected env from .env
+[CORS] Allowed origins: ["http://localhost:3000","http://localhost:5173"]
+[STATIC] Serving frontend from /app/dist
+
+╔══════════════════════════════════════════════════════════╗
+║   Wao Félicitations - API Server                        ║
+║   PHASE 6, 7, 8 - Sécurité, Logique Métier, Logs       ║
+╚══════════════════════════════════════════════════════════╝
+
+Server running on http://0.0.0.0:3001
+
+✅ Authentification JWT
+✅ RBAC (Role-Based Access Control)
+✅ Logique métier automatisée
+✅ Journalisation ActionLogs
+
+Protected routes require Authorization header:
+Authorization: Bearer <token>
+
+[2026-07-26T13:34:26.742Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: http://localhost:5173
+(node:287538) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
+
+To prepare for this change:
+- If you want the current behavior, explicitly use 'sslmode=verify-full'
+- If you want libpq compatibility now, use 'uselibpqcompat=true&sslmode=require'
+
+See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2026-07-26T13:36:05.605Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: http://localhost:5173
+[2026-07-26T13:37:20.567Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: http://localhost:5173
+[2026-07-27T23:11:30.283Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: http://localhost:5173
+✅ Login success for alice@waooo.com - Role: caissier
+[2026-07-27T23:11:34.162Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
+[2026-07-27T23:11:34.261Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
+[2026-07-27T23:11:34.571Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
+[2026-07-27T23:11:35.068Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
