@@ -121,7 +121,7 @@ export default function ClientManagement({ currentUser }: Props) {
   const [financeLabel, setFinanceLabel] = useState('');
   const [transferAccount, setTransferAccount] = useState<Account | null>(null);
   const [transferAmount, setTransferAmount] = useState(0);
-  const [transferReason, setTransferReason] = useState('Transfert surplus remboursement → Actifs');
+  const [transferReason, setTransferReason] = useState('Transfert surplus remboursement → Compte courant');
 
   const [msg, setMsg] = useState({ text: '', type: '' });
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -145,9 +145,45 @@ export default function ClientManagement({ currentUser }: Props) {
   const [bulkError, setBulkError] = useState('');
   const isAdmin = currentUser.role === 'admin';
   const isCashier = currentUser.role === 'caissier';
-  const accountLabel = (client?: Client | null) => (isCashier && client && client.type !== 'simple' ? 'compte courant' : 'compte épargne');
-  const accountLabelCap = (client?: Client | null) => (isCashier && client && client.type !== 'simple' ? 'Compte courant' : 'Compte épargne');
-  const assetLabel = (client?: Client | null) => (isCashier && client && client.type !== 'simple' ? 'actifs' : 'épargne');
+  const accountLabel = (client?: Client | null) => (isCashier ? 'compte courant' : 'compte épargne');
+  const accountLabelCap = (client?: Client | null) => (isCashier ? 'Compte courant' : 'Compte épargne');
+  const assetLabel = (client?: Client | null) => (isCashier ? 'compte courant' : 'épargne');
+
+  const formatFriendlyDate = (dateStr?: string) => {
+    if (!dateStr) return '—';
+    try {
+      const normalized = dateStr.replace(' ', 'T');
+      const d = new Date(normalized);
+      if (isNaN(d.getTime())) {
+        const direct = new Date(dateStr);
+        if (isNaN(direct.getTime())) return dateStr;
+        return new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }).format(direct);
+      }
+      return new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }).format(d);
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
+  const formatFriendlyDateTime = (dateTimeStr?: string) => {
+    if (!dateTimeStr) return '—';
+    try {
+      const normalized = dateTimeStr.replace(' ', 'T');
+      const d = new Date(normalized);
+      if (isNaN(d.getTime())) {
+        const direct = new Date(dateTimeStr);
+        if (isNaN(direct.getTime())) return dateTimeStr;
+        const formattedDate = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }).format(direct);
+        const formattedTime = direct.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        return `${formattedDate} à ${formattedTime}`;
+      }
+      const formattedDate = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }).format(d);
+      const formattedTime = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      return `${formattedDate} à ${formattedTime}`;
+    } catch (e) {
+      return dateTimeStr;
+    }
+  };
 
   // ── Liste filtrée mémoisée (ne recalcule que si clients, searchTerm ou rôle changent) ──
   const filteredClients = useMemo(() => clients.filter(c => {
@@ -644,7 +680,7 @@ export default function ClientManagement({ currentUser }: Props) {
     setTransferAccount(null);
     setTransferAmount(0);
     setTransferError('');
-    setTransferReason('Transfert surplus remboursement → Actifs');
+    setTransferReason('Transfert surplus remboursement → Compte courant');
     setMsg({ text: `✅ ${transferAmount.toLocaleString()} F transférés avec succès vers le ${accountLabel(viewClient)} ${savingsAccount.accountNumber}.`, type: 'success' });
   };
 
@@ -892,7 +928,7 @@ export default function ClientManagement({ currentUser }: Props) {
                 <th className="px-4 py-3 text-left font-semibold">Client</th>
                 <th className="px-4 py-3 text-left font-semibold">Type</th>
                 <th className="px-4 py-3 text-left font-semibold">Tél.</th>
-                <th className="px-4 py-3 text-left font-semibold">{isCashier ? 'Actifs' : 'Épargne'}</th>
+                <th className="px-4 py-3 text-left font-semibold">{isCashier ? 'Compte courant' : 'Épargne'}</th>
                 <th className="px-4 py-3 text-left font-semibold">{isCashier ? 'Passifs' : 'Financement'}</th>
                 <th className="px-4 py-3 text-left font-semibold">{isCashier ? 'Dette en cours' : 'Scolarité'}</th>
                 <th className="px-4 py-3 text-left font-semibold">Actions</th>
@@ -931,18 +967,40 @@ export default function ClientManagement({ currentUser }: Props) {
                     }
                   }
                 }
+                if (debtRemaining < 0) debtRemaining = 0;
+
+                let passifAmount = 0;
+                if (hasActiveFinancing) {
+                  if (c.type === 'apprenant') {
+                    if (activeSchoolDebt) {
+                      passifAmount = Number(activeSchoolDebt.debtAmount || 0);
+                    } else if (activeFinancingAcc) {
+                      passifAmount = Number(activeFinancingAcc.totalDue || 0);
+                    } else {
+                      passifAmount = Math.abs(financingBalance);
+                    }
+                  } else {
+                    if (activeFinancingAcc) {
+                      passifAmount = Number(activeFinancingAcc.totalDue || 0);
+                    } else {
+                      passifAmount = Math.abs(financingBalance);
+                    }
+                  }
+                }
+
+                const displayedSavingsBalance = (isCashier && hasActiveFinancing && debtRemaining > 0) ? 0 : savingsBalance;
 
                 return (
                   <tr key={c.id} className="hover:bg-slate-50/60">
                     <td className="px-4 py-3"><p className="font-semibold text-slate-900">{c.name || 'Sans nom'}</p><p className="text-xs text-slate-400">Zone: {commName(c.assignedCommercialId)}</p></td>
                     <td className="px-4 py-3">{typeBadge(c.type)}</td>
                     <td className="px-4 py-3 text-slate-500">{c.phone || '—'}</td>
-                    <td className="px-4 py-3 font-semibold text-emerald-600">{savingsBalance.toLocaleString()} F</td>
+                    <td className="px-4 py-3 font-semibold text-emerald-600">{displayedSavingsBalance.toLocaleString()} F</td>
                     <td className="px-4 py-3 font-semibold">
                       {isCashier ? (
                         hasActiveFinancing ? (
-                          <span className={financingBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
-                            {financingBalance.toLocaleString()} F
+                          <span className="text-rose-600">
+                            {passifAmount.toLocaleString()} F
                           </span>
                         ) : (
                           <span className="text-slate-400 text-xs">—</span>
@@ -1097,6 +1155,52 @@ export default function ClientManagement({ currentUser }: Props) {
           : surplusAccounts.reduce((s, a) => s + (a.residualBalance || 0), 0);
         const clientTxs = transactions.filter(t => t.clientId === viewClient.id).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
 
+        const schoolDebts = viewClient.schoolDebts || [];
+        const activeSchoolDebt = schoolDebts.find(d => d.active);
+        const activeFinancingAcc = financeAccs.find(a => a.status === 'actif');
+        const hasActiveFinancing = isCashier && (!!activeSchoolDebt || !!activeFinancingAcc) && viewClient.financingBalance < 0;
+
+        let debtRemaining = 0;
+        if (hasActiveFinancing) {
+          if (viewClient.type === 'apprenant') {
+            if (activeSchoolDebt) {
+              debtRemaining = Number(activeSchoolDebt.debtAmount || 0) - Number(activeSchoolDebt.paidAmount || 0);
+            } else if (activeFinancingAcc) {
+              debtRemaining = Number(activeFinancingAcc.totalDue || 0) - Number(activeFinancingAcc.totalPaid || 0);
+            } else {
+              debtRemaining = Math.abs(viewClient.financingBalance);
+            }
+          } else {
+            if (activeFinancingAcc) {
+              debtRemaining = Number(activeFinancingAcc.totalDue || 0) - Number(activeFinancingAcc.totalPaid || 0);
+            } else {
+              debtRemaining = Math.abs(viewClient.financingBalance);
+            }
+          }
+        }
+        if (debtRemaining < 0) debtRemaining = 0;
+
+        let passifAmount = 0;
+        if (hasActiveFinancing) {
+          if (viewClient.type === 'apprenant') {
+            if (activeSchoolDebt) {
+              passifAmount = Number(activeSchoolDebt.debtAmount || 0);
+            } else if (activeFinancingAcc) {
+              passifAmount = Number(activeFinancingAcc.totalDue || 0);
+            } else {
+              passifAmount = Math.abs(viewClient.financingBalance);
+            }
+          } else {
+            if (activeFinancingAcc) {
+              passifAmount = Number(activeFinancingAcc.totalDue || 0);
+            } else {
+              passifAmount = Math.abs(viewClient.financingBalance);
+            }
+          }
+        }
+
+        const displayedSavingsBalance = (isCashier && hasActiveFinancing && debtRemaining > 0) ? 0 : Number(viewClient.savingsBalance || 0);
+
         return (
           <div className="fixed inset-0 bg-slate-950/60 flex items-start justify-center p-4 z-50 overflow-y-auto">
             <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full my-8 overflow-hidden">
@@ -1116,16 +1220,16 @@ export default function ClientManagement({ currentUser }: Props) {
                 {/* KPIs */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                   <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-3">
-                    <p className="text-xs text-emerald-700 font-medium">{isCashier ? 'Solde Actifs' : 'Solde Épargne'}</p>
-                    <p className="mt-1 text-xl font-bold text-emerald-900">{Number(viewClient.savingsBalance || 0).toLocaleString()} F</p>
+                    <p className="text-xs text-emerald-700 font-medium">{isCashier ? 'Compte courant' : 'Solde Épargne'}</p>
+                    <p className="mt-1 text-xl font-bold text-emerald-900">{displayedSavingsBalance.toLocaleString()} F</p>
                     {savingsAcc && <p className="text-[10px] text-emerald-600 mt-0.5">{savingsAcc.accountNumber}</p>}
                   </div>
                   <div className={`rounded-2xl border p-3 ${Number(viewClient.financingBalance || 0) >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
                     <p className={`text-xs font-medium ${Number(viewClient.financingBalance || 0) >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                      {Number(viewClient.financingBalance || 0) < 0 ? 'Dette financement' : 'Surplus financement'}
+                      {isCashier ? 'Passifs' : (Number(viewClient.financingBalance || 0) < 0 ? 'Dette financement' : 'Surplus financement')}
                     </p>
                     <p className={`mt-1 text-xl font-bold ${Number(viewClient.financingBalance || 0) >= 0 ? 'text-emerald-900' : 'text-rose-900'}`}>
-                      {Number(viewClient.financingBalance || 0).toLocaleString()} F
+                      {(isCashier && hasActiveFinancing ? passifAmount : Number(viewClient.financingBalance || 0)).toLocaleString()} F
                     </p>
                     <p className="text-[10px] text-slate-500 mt-0.5">{financeAccs.length} dossier(s) · {Number(viewClient.financingBalance || 0) < 0 ? 'Remboursement en cours' : Number(viewClient.financingBalance || 0) > 0 ? `Transférable vers ${assetLabel(viewClient)}` : 'Soldé'}</p>
                   </div>
@@ -1135,7 +1239,7 @@ export default function ClientManagement({ currentUser }: Props) {
                   </div>
                   <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3">
                     <p className="text-xs text-slate-500 font-medium">Inscrit le</p>
-                    <p className="mt-1 text-lg font-bold text-slate-900">{viewClient.createdAt}</p>
+                    <p className="mt-1 text-lg font-bold text-slate-900">{formatFriendlyDate(viewClient.createdAt)}</p>
                   </div>
                 </div>
 
@@ -1173,7 +1277,7 @@ export default function ClientManagement({ currentUser }: Props) {
                               setTransferAccount(surplusAccounts[0]);
                               setTransferAmount(0);
                               setTransferError('');
-                              setTransferReason('Transfert surplus remboursement → Actifs');
+                              setTransferReason('Transfert surplus remboursement → Compte courant');
                             }}
                             className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 shadow-sm shadow-amber-200"
                           >
@@ -1276,7 +1380,7 @@ export default function ClientManagement({ currentUser }: Props) {
                         </div>
                         <div className="text-right">
                           <p className={`font-semibold ${t.type === 'retrait' ? 'text-rose-700' : 'text-emerald-700'}`}>{t.type === 'retrait' ? '-' : '+'}{t.amount.toLocaleString()} F</p>
-                          <p className="text-xs text-slate-400">{t.date}</p>
+                          <p className="text-xs text-slate-400">{formatFriendlyDateTime(t.date)}</p>
                         </div>
                       </div>
                     ))}
@@ -1304,7 +1408,7 @@ export default function ClientManagement({ currentUser }: Props) {
                         <p><strong>Contact :</strong> {viewClient.phone}</p>
                         <p><strong>Sexe :</strong> —</p>
                         <p><strong>Fonction :</strong> Apprenant</p>
-                        <p><strong>Date d'Adhésion :</strong> {viewClient.createdAt}</p>
+                        <p><strong>Date d'Adhésion :</strong> {formatFriendlyDate(viewClient.createdAt)}</p>
                       </div>
                       <table className="w-full border-collapse border border-slate-900 text-[10px]">
                         <thead>
@@ -1347,7 +1451,7 @@ export default function ClientManagement({ currentUser }: Props) {
                         <p><strong>Contact :</strong> {viewClient.phone}</p>
                         <p><strong>Sexe :</strong> —</p>
                         <p><strong>Fonction :</strong> Parent / Adhérent</p>
-                        <p><strong>Date d'Adhésion :</strong> {viewClient.createdAt}</p>
+                        <p><strong>Date d'Adhésion :</strong> {formatFriendlyDate(viewClient.createdAt)}</p>
                       </div>
                       <table className="w-full border-collapse border border-slate-900 text-xs">
                         <thead>

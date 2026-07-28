@@ -9,3 +9,8 @@
   ➜  Network: use --host to expose
 1:27:14 PM [vite] .env changed, restarting server...
 1:27:14 PM [vite] server restarted.
+11:53:58 PM [vite] (client) hmr update /src/components/ClientManagement.tsx, /src/index.css
+11:56:11 PM [vite] (client) hmr update /src/components/ClientManagement.tsx, /src/index.css
+11:58:21 PM [vite] (client) hmr update /src/components/ClientManagement.tsx, /src/index.css
+11:59:28 PM [vite] (client) hmr update /src/components/ClientManagement.tsx, /src/index.css
+12:01:36 AM [vite] (client) hmr update /src/components/ClientManagement.tsx, /src/index.css
