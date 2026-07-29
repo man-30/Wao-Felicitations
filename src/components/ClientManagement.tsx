@@ -99,6 +99,13 @@ export default function ClientManagement({ currentUser }: Props) {
   const [editError, setEditError] = useState('');
   const [editRequestId, setEditRequestId] = useState('');
 
+  // Reset Account
+  const [resetClient, setResetClient] = useState<Client | null>(null);
+  const [resetCode, setResetCode] = useState('');
+  const [resetError, setResetError] = useState('');
+  const [resetRequestId, setResetRequestId] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
+
   // Delete
   const [deleteClient, setDeleteClient] = useState<Client | null>(null);
   const [deleteError, setDeleteError] = useState('');
@@ -345,6 +352,96 @@ export default function ClientManagement({ currentUser }: Props) {
     db.addLog(currentUser.id, currentUser.name, currentUser.role, 'Modification Client', `Client ${editClient.id} modifié. Avant: ${before}. Après: ${after}. Code: ${editCode}`);
     setEditClient(null);
     setMsg({ text: 'Client modifié avec succès (traçabilité complète).', type: 'success' });
+  };
+
+  const openReset = (c: Client) => {
+    const request = requestAdminCode({
+      requestedBy: currentUser,
+      actionType: 'client_reset' as any,
+      targetId: c.id,
+      targetLabel: `Réinitialisation de ${c.name}`,
+      reason: 'Réinitialisation complète du compte (soldes, cotisations, financements)',
+    });
+    setResetClient(c);
+    setResetCode('');
+    setResetRequestId(request.id);
+    setResetError('');
+  };
+
+  const handleReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetClient) return;
+
+    setIsResetting(true);
+    setResetError('');
+
+    try {
+      const validation = validateAndConsumeAdminCode({
+        code: resetCode,
+        actionType: 'client_reset' as any,
+        targetId: resetClient.id,
+        usedBy: currentUser,
+      });
+      if (!validation.ok) {
+        setResetError(validation.message || 'Code invalide.');
+        setIsResetting(false);
+        return;
+      }
+
+      // Call the backend endpoint to reset the client's accounts, transactions, and balances
+      await api.resetClient(resetClient.id);
+
+      // Also reset client locally in state and localStorageDB for immediate consistent fallback UI
+      const clientId = resetClient.id;
+
+      const updatedClients = clients.map(c => {
+        if (c.id !== clientId) return c;
+        return {
+          ...c,
+          savingsBalance: 0,
+          financingBalance: 0,
+          schoolDebts: []
+        };
+      });
+      db.saveClients(updatedClients);
+      setClients(updatedClients);
+
+      const updatedAccounts = accounts.filter(a => a.clientId !== clientId);
+      db.saveAccounts(updatedAccounts);
+      setAccounts(updatedAccounts);
+
+      const updatedTransactions = transactions.filter(t => t.clientId !== clientId);
+      db.saveTransactions(updatedTransactions);
+
+      const tontineAccs = db.getTontineAccounts().filter(ta => {
+        const ap = db.getApprenants().find(ap2 => ap2.id === ta.apprenantId);
+        return !ap || ap.clientId !== clientId;
+      });
+      db.saveTontineAccounts(tontineAccs);
+
+      const nonApIds = db.getNonApprenants().filter(na => na.clientId === clientId).map(na => na.id);
+      const updatedFinancements = db.getFinancements().filter(f => !nonApIds.includes(f.nonApprenantId));
+      db.saveFinancements(updatedFinancements);
+
+      db.addLog(
+        currentUser.id,
+        currentUser.name,
+        currentUser.role,
+        'Réinitialisation compte',
+        `Réinitialisation complète du compte de ${resetClient.name} (${clientId}). Soldes, transactions et financements remis à zéro. Code: ${resetCode}`
+      );
+
+      // Force refresh data
+      await fetchClients();
+
+      setResetClient(null);
+      setEditClient(null); // Close the edit modal as well
+      setMsg({ text: `Le compte de ${resetClient.name} a été réinitialisé avec succès sur le serveur et en local.`, type: 'success' });
+    } catch (err: any) {
+      setResetError(err.message || 'Une erreur est survenue lors de la réinitialisation.');
+    } finally {
+      setIsResetting(false);
+    }
   };
 
   const openDelete = (c: Client) => {
@@ -1044,7 +1141,7 @@ export default function ClientManagement({ currentUser }: Props) {
                     <td className="px-4 py-3">
                       <div className="flex gap-1.5 flex-wrap">
                         <button onClick={() => setViewClient(c)} title="Consulter" className="p-1.5 rounded-lg bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 border border-slate-200"><Eye className="w-3.5 h-3.5" /></button>
-                        {isCashier && <button onClick={() => openEdit(c)} title="Modifier (code admin)" className="p-1.5 rounded-lg bg-slate-100 hover:bg-amber-50 text-slate-600 hover:text-amber-600 border border-slate-200"><Pencil className="w-3.5 h-3.5" /></button>}
+                        {(isCashier || isAdmin) && <button onClick={() => openEdit(c)} title="Modifier (code admin)" className="p-1.5 rounded-lg bg-slate-100 hover:bg-amber-50 text-slate-600 hover:text-amber-600 border border-slate-200"><Pencil className="w-3.5 h-3.5" /></button>}
                         {isAdmin && <button onClick={() => openDelete(c)} title="Supprimer (confirmation popup)" className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200"><Trash2 className="w-3.5 h-3.5" /></button>}
                         {isCashier && c.type === 'apprenant' && <button onClick={() => setMigrateClient(c)} title="Changer établissement" className="p-1.5 rounded-lg bg-slate-100 hover:bg-purple-50 text-slate-600 hover:text-purple-600 border border-slate-200"><ArrowRightLeft className="w-3.5 h-3.5" /></button>}
                         {(isCashier || isAdmin) && (c.type === 'simple' || (c.type as string) === 'simple') && (
@@ -1084,9 +1181,88 @@ export default function ClientManagement({ currentUser }: Props) {
               <label className="block space-y-1"><span className="text-xs font-semibold text-slate-500">Téléphone</span><input type="text" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} /></label>
               <label className="block space-y-1"><span className="text-xs font-semibold text-slate-500">Adresse</span><input type="text" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500" value={editAddress} onChange={(e) => setEditAddress(e.target.value)} /></label>
               <label className="block space-y-1"><span className="text-xs font-semibold text-slate-500">Code Admin *</span><input type="text" required className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500 font-mono" value={editCode} onChange={(e) => setEditCode(e.target.value.toUpperCase())} placeholder="ADM-ABC123" /></label>
+              <div className="flex justify-between items-center gap-2 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => openReset(editClient)}
+                  className="px-4 py-2 bg-rose-100 hover:bg-rose-200 text-rose-700 text-sm font-bold rounded-xl transition-all"
+                >
+                  Réinitialiser le compte
+                </button>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setEditClient(null)} className="px-4 py-2 border border-slate-200 text-slate-600 text-sm rounded-xl hover:bg-slate-50">Annuler</button>
+                  <button type="submit" className="px-4 py-2 bg-amber-600 text-white text-sm font-semibold rounded-xl hover:bg-amber-700">Valider la modification</button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Confirmation Modal */}
+      {resetClient && (
+        <div className="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[60] backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden border border-rose-100">
+            <div className="p-5 border-b border-rose-100 flex items-center justify-between bg-gradient-to-r from-rose-900 to-rose-800 text-white">
+              <h3 className="font-bold flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-rose-200 animate-pulse" />
+                Réinitialisation critique du compte
+              </h3>
+              <button onClick={() => setResetClient(null)} className="p-1 hover:bg-rose-700/50 rounded-full text-white/80 hover:text-white"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleReset} className="p-6 space-y-4">
+              {resetError && (
+                <div className="p-3 text-sm rounded-xl bg-red-50 text-red-600 border border-red-200">
+                  {resetError}
+                </div>
+              )}
+
+              <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-950 leading-relaxed space-y-2">
+                <p><strong>⚠️ ATTENTION DANGER :</strong> Vous allez réinitialiser toutes les données financières de <strong>{resetClient.name}</strong>.</p>
+                <p>Cette action supprimera de manière <strong>DÉFINITIVE</strong> :</p>
+                <ul className="list-disc pl-4 space-y-1 font-semibold text-rose-900">
+                  <li>Les financements et dettes (scolaires et de matériels)</li>
+                  <li>Les cotisations, les transactions et l'historique</li>
+                  <li>Tous les soldes seront remis à <strong>0 FCFA</strong></li>
+                </ul>
+                <p className="border-t border-rose-200/60 pt-2 font-medium">
+                  <strong>Données conservées :</strong> Le nom du client, sa date d'inscription, son numéro de téléphone, son adresse, et toutes les informations/documents d'identité et de contact.
+                </p>
+              </div>
+
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+                <strong>Sécurité Admin :</strong> Demande initiée. Référence de validation: <span className="font-mono font-bold text-slate-900">{resetRequestId}</span>. Demandez à un administrateur de générer et vous fournir le code temporaire.
+              </div>
+
+              <label className="block space-y-1">
+                <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Code Administrateur requis *</span>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-rose-500 font-mono text-center tracking-widest text-lg font-bold"
+                  value={resetCode}
+                  onChange={(e) => setResetCode(e.target.value.toUpperCase())}
+                  placeholder="ADM-ABC123"
+                  autoFocus
+                />
+              </label>
+
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setEditClient(null)} className="px-4 py-2 border border-slate-200 text-slate-600 text-sm rounded-xl hover:bg-slate-50">Annuler</button>
-                <button type="submit" className="px-4 py-2 bg-amber-600 text-white text-sm font-semibold rounded-xl hover:bg-amber-700">Valider la modification</button>
+                <button
+                  type="button"
+                  onClick={() => setResetClient(null)}
+                  className="px-4 py-2 border border-slate-200 text-slate-600 text-sm rounded-xl hover:bg-slate-50 font-semibold"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={isResetting || !resetCode}
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-rose-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isResetting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {isResetting ? 'Réinitialisation en cours...' : 'Confirmer la réinitialisation'}
+                </button>
               </div>
             </form>
           </div>
@@ -1224,15 +1400,25 @@ export default function ClientManagement({ currentUser }: Props) {
                     <p className="mt-1 text-xl font-bold text-emerald-900">{displayedSavingsBalance.toLocaleString()} F</p>
                     {savingsAcc && <p className="text-[10px] text-emerald-600 mt-0.5">{savingsAcc.accountNumber}</p>}
                   </div>
-                  <div className={`rounded-2xl border p-3 ${Number(viewClient.financingBalance || 0) >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
-                    <p className={`text-xs font-medium ${Number(viewClient.financingBalance || 0) >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                      {isCashier ? 'Passifs' : (Number(viewClient.financingBalance || 0) < 0 ? 'Dette financement' : 'Surplus financement')}
-                    </p>
-                    <p className={`mt-1 text-xl font-bold ${Number(viewClient.financingBalance || 0) >= 0 ? 'text-emerald-900' : 'text-rose-900'}`}>
-                      {(isCashier && hasActiveFinancing ? passifAmount : Number(viewClient.financingBalance || 0)).toLocaleString()} F
-                    </p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">{financeAccs.length} dossier(s) · {Number(viewClient.financingBalance || 0) < 0 ? 'Remboursement en cours' : Number(viewClient.financingBalance || 0) > 0 ? `Transférable vers ${assetLabel(viewClient)}` : 'Soldé'}</p>
-                  </div>
+                  {viewClient.type !== 'simple' ? (
+                    <div className={`rounded-2xl border p-3 ${Number(viewClient.financingBalance || 0) >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+                      <p className={`text-xs font-medium ${Number(viewClient.financingBalance || 0) >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                        {isCashier ? 'Passifs' : (Number(viewClient.financingBalance || 0) < 0 ? 'Dette financement' : 'Surplus financement')}
+                      </p>
+                      <p className={`mt-1 text-xl font-bold ${Number(viewClient.financingBalance || 0) >= 0 ? 'text-emerald-900' : 'text-rose-900'}`}>
+                        {(isCashier && hasActiveFinancing ? passifAmount : Number(viewClient.financingBalance || 0)).toLocaleString()} F
+                      </p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{financeAccs.length} dossier(s) · {Number(viewClient.financingBalance || 0) < 0 ? 'Remboursement en cours' : Number(viewClient.financingBalance || 0) > 0 ? `Transférable vers ${assetLabel(viewClient)}` : 'Soldé'}</p>
+                    </div>
+                  ) : (
+                    savingsAcc?.dailyContribution && savingsAcc.dailyContribution > 0 ? (
+                      <div className="rounded-2xl bg-teal-50 border border-teal-200 p-3">
+                        <p className="text-xs text-teal-700 font-medium">Mise journalière</p>
+                        <p className="mt-1 text-xl font-bold text-teal-900">{savingsAcc.dailyContribution.toLocaleString()} F / jour</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">Tontine active</p>
+                      </div>
+                    ) : null
+                  )}
                   <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3">
                     <p className="text-xs text-slate-500 font-medium">Téléphone</p>
                     <p className="mt-1 text-lg font-bold text-slate-900">{viewClient.phone}</p>
