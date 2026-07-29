@@ -40,3 +40,9 @@ See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode de
 [2026-07-27T23:11:34.261Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
 [2026-07-27T23:11:34.571Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
 [2026-07-27T23:11:35.068Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
+[2026-07-28T00:03:41.080Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: http://localhost:5173
+✅ Login success for alice@waooo.com - Role: caissier
+[2026-07-28T00:03:44.871Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
+[2026-07-28T00:03:44.886Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
+[2026-07-28T00:03:45.184Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
+[2026-07-28T00:03:45.523Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
