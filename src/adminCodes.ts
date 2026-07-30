@@ -123,5 +123,6 @@ export function actionTypeLabel(actionType: AdminCodeActionType) {
     case 'cotisation_edit': return 'Modification cotisation';
     case 'cotisation_delete': return 'Suppression cotisation';
     case 'deposit_edit': return 'Correction dépôt';
+    case 'client_reset': return 'Réinitialisation compte';
   }
 }

@@ -304,6 +304,14 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
 })
 
 /**
+ * GET /health
+ * Simple health check for test suite compatibility
+ */
+app.get('/health', (req: Request, res: Response) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+})
+
+/**
  * GET /api/health
  * Test database and server health
  */
@@ -1129,6 +1137,94 @@ app.delete('/api/clients/:clientId', authenticateToken, requireRole('admin'), as
 })
 
 /**
+ * POST /api/clients/:clientId/reset
+ * Réinitialise toutes les données financières d'un compte (comptes, transactions, cotisations, financements, dettes)
+ * Conserve le nom, date d'inscription, informations d'identité et contact.
+ * Rôles: admin, caissier
+ */
+app.post('/api/clients/:clientId/reset', authenticateToken, requireRole('admin', 'caissier'), async (req: Request, res: Response) => {
+  try {
+    const { clientId } = req.params
+
+    // Vérifier que le client existe
+    const clientExists = await prisma.client.findUnique({
+      where: { id: clientId }
+    })
+
+    if (!clientExists) {
+      return res.status(404).json({ error: 'Client introuvable' })
+    }
+
+    // Réinitialiser dans l'ordre inverse des dépendances pour éviter les violations de clés étrangères
+    await prisma.$transaction([
+      // 1. Mettre à jour transactionId dans ActionLog à null pour éviter les violations de clé étrangère
+      prisma.actionLog.updateMany({
+        where: { transaction: { clientId } },
+        data: { transactionId: null }
+      }),
+      // 2. Supprimer les cotisations liées aux comptes tontine de ce client
+      prisma.cotisation.deleteMany({
+        where: {
+          tontineAccount: {
+            apprenant: {
+              clientId
+            }
+          }
+        }
+      }),
+      // 3. Supprimer les comptes tontine
+      prisma.tontineAccount.deleteMany({
+        where: {
+          apprenant: {
+            clientId
+          }
+        }
+      }),
+      // 4. Supprimer les financements non-apprenant
+      prisma.financementNonApprenant.deleteMany({
+        where: {
+          nonApprenant: {
+            clientId
+          }
+        }
+      }),
+      // 5. Supprimer toutes les transactions de ce client
+      prisma.transaction.deleteMany({ where: { clientId } }),
+      // 6. Supprimer toutes les transactions d'assurance
+      prisma.insuranceTransaction.deleteMany({ where: { clientId } }),
+      // 7. Supprimer toutes les dettes scolaires de ce client
+      prisma.schoolDebt.deleteMany({ where: { clientId } }),
+      // 8. Supprimer tous les comptes de ce client
+      prisma.account.deleteMany({ where: { clientId } }),
+      // 9. Remettre à zéro les soldes d'épargne et de financement du client
+      prisma.client.update({
+        where: { id: clientId },
+        data: {
+          savingsBalance: 0,
+          financingBalance: 0
+        }
+      }),
+    ])
+
+    // Logger l'action de réinitialisation dans la table ActionLog
+    await prisma.actionLog.create({
+      data: {
+        userId: req.user!.userId,
+        userName: req.user!.email,
+        userRole: req.user!.role,
+        action: 'Réinitialisation compte',
+        details: `Réinitialisation complète du compte client ${clientExists.name} (${clientId}). Soldes, transactions et financements remis à zéro.`
+      }
+    })
+
+    res.json({ message: `Le compte de ${clientExists.name} a été réinitialisé avec succès.` })
+  } catch (error: any) {
+    console.error('[RESET CLIENT ERROR]', error)
+    res.status(500).json({ error: 'Échec de la réinitialisation du compte', message: error.message })
+  }
+})
+
+/**
  * GET /api/users
  * Récupère la liste de tous les utilisateurs (pour sélection commercial etc.)
  */
@@ -1203,6 +1299,23 @@ app.post('/api/users', authenticateToken, requireRole('admin'), async (req: Requ
 // ───────────────────────────────────────────────────────────────────────────
 // TRANSACTION ROUTES
 // ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/transactions
+ * Récupère la liste de toutes les transactions
+ */
+app.get('/api/transactions', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const transactions = await prisma.transaction.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    })
+    res.json(transactions)
+  } catch (error: any) {
+    console.error('Fetch transactions error:', error)
+    res.status(500).json({ error: 'Failed to fetch transactions', message: error.message })
+  }
+})
 
 /**
  * POST /api/transactions

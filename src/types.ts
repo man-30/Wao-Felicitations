@@ -288,7 +288,7 @@ export interface ActionLog {
   afterValue?: string;
 }
 
-export type AdminCodeActionType = 'client_edit' | 'cotisation_edit' | 'cotisation_delete' | 'deposit_edit';
+export type AdminCodeActionType = 'client_edit' | 'cotisation_edit' | 'cotisation_delete' | 'deposit_edit' | 'client_reset';
 export type AdminCodeRequestStatus = 'pending' | 'generated' | 'used' | 'expired';
 
 export interface AdminCodeRequest {

@@ -93,6 +93,12 @@ export const api = {
     });
   },
 
+  async resetClient(id: string) {
+    return this.request<any>(`/api/clients/${id}/reset`, {
+      method: 'POST',
+    });
+  },
+
   async reassignClient(clientId: string, assignedCommercialId: string) {
     return this.request<any>(`/api/clients/${clientId}/reassign`, {
       method: 'PATCH',
