@@ -1,160 +1,51 @@
 react-vite-tailwind@0.0.0 backend:dev
 npx tsx backend-express-complete.ts
 
+> react-vite-tailwind@0.0.0 backend:dev
+> npx tsx backend-express-complete.ts
+
 ◇ injected env (0) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
 ◇ injected env from .env
 [CORS] Allowed origins: ["http://localhost:3000","http://localhost:5173"]
 [STATIC] Serving frontend from /app/dist
 
+╔══════════════════════════════════════════════════════════╗
+║   Wao Félicitations - API Server                        ║
+║   PHASE 6, 7, 8 - Sécurité, Logique Métier, Logs       ║
+╚══════════════════════════════════════════════════════════╝
+
+Server running on http://0.0.0.0:3001
+
+✅ Authentification JWT
+✅ RBAC (Role-Based Access Control)
+✅ Logique métier automatisée
+✅ Journalisation ActionLogs
+
+Protected routes require Authorization header:
+Authorization: Bearer <token>
+
 [2026-07-29T23:15:26.524Z] GET /health - IP: 127.0.0.1 - Origin: undefined
 [2026-07-29T23:15:26.559Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: undefined
 (node:253778) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
 
-[2026-07-29T23:07:23.239Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:07:23.242Z] GET /api/audit-logs - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:07:35.351Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: undefined
-✅ Login success for dayo.dodzi@waooo.com - Role: admin
-[2026-07-29T23:07:53.596Z] GET /api/transactions - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:06.538Z] GET / - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:06.548Z] GET / - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:06.553Z] GET / - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:06.562Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:06.812Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:06.848Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:06.851Z] GET /api/audit-logs - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:06.854Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:06.857Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-Token verification failed: JsonWebTokenError: jwt malformed
-    at module.exports [as verify] (/app/node_modules/jsonwebtoken/verify.js:70:17)
-    at verifyToken (/app/lib/security.ts:103:25)
-    at authenticateToken (/app/lib/middleware/auth.ts:35:19)
-    at Layer.handleRequest (/app/node_modules/router/lib/layer.js:152:17)
-    at next (/app/node_modules/router/lib/route.js:157:13)
-    at Route.dispatch (/app/node_modules/router/lib/route.js:117:3)
-    at handle (/app/node_modules/router/index.js:435:11)
-    at Layer.handleRequest (/app/node_modules/router/lib/layer.js:152:17)
-    at /app/node_modules/router/index.js:295:15
-    at processParams (/app/node_modules/router/index.js:582:12)
-[2026-07-29T23:13:06.866Z] POST /api/clients - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:06.868Z] POST /api/clients - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:06.871Z] POST /api/clients - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:06.873Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:06.875Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:06.878Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:06.880Z] GET /api/audit-logs - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:06.881Z] POST /api/clients - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:06.883Z] GET /api/clients/invalid-format-id - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:34.984Z] POST /api/seed - IP: 127.0.0.1 - Origin: undefined
-🌱 Starting seed...
-Deleting existing test users...
-✅ Old users deleted
-Creating new test users...
-Creating user: admin@wao.test
-✅ Created: admin@wao.test
-Creating user: cashier@wao.test
-✅ Created: cashier@wao.test
-Creating user: commercial@wao.test
-✅ Created: commercial@wao.test
-✅ Seed completed. Created 3 users
-[2026-07-29T23:13:51.705Z] GET / - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:51.712Z] GET / - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:51.717Z] GET / - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:51.723Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: undefined
+To prepare for this change:
+- If you want the current behavior, explicitly use 'sslmode=verify-full'
+- If you want libpq compatibility now, use 'uselibpqcompat=true&sslmode=require'
+
+See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
+(Use `node --trace-warnings ...` to show where the warning was created)
 ✅ Login success for admin@wao.test - Role: admin
-[2026-07-29T23:13:51.865Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: undefined
+[2026-07-29T23:15:27.143Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
+[2026-07-29T23:15:27.396Z] GET /api/audit-logs - IP: 127.0.0.1 - Origin: undefined
+[2026-07-29T23:16:01.731Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: undefined
 ✅ Login success for admin@wao.test - Role: admin
-[2026-07-29T23:13:52.006Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:52.241Z] GET /api/audit-logs - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:52.342Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:52.345Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-Token verification failed: JsonWebTokenError: jwt malformed
-    at module.exports [as verify] (/app/node_modules/jsonwebtoken/verify.js:70:17)
-    at verifyToken (/app/lib/security.ts:103:25)
-    at authenticateToken (/app/lib/middleware/auth.ts:35:19)
-    at Layer.handleRequest (/app/node_modules/router/lib/layer.js:152:17)
-    at next (/app/node_modules/router/lib/route.js:157:13)
-    at Route.dispatch (/app/node_modules/router/lib/route.js:117:3)
-    at handle (/app/node_modules/router/index.js:435:11)
-    at Layer.handleRequest (/app/node_modules/router/lib/layer.js:152:17)
-    at /app/node_modules/router/index.js:295:15
-    at processParams (/app/node_modules/router/index.js:582:12)
-[2026-07-29T23:13:52.349Z] POST /api/clients - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:52.352Z] POST /api/clients - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:52.355Z] POST /api/clients - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:52.357Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:52.392Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:52.428Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:52.433Z] GET /api/audit-logs - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:52.436Z] POST /api/clients - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:13:52.730Z] GET /api/clients/invalid-format-id - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:14:25.757Z] GET /health - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:14:25.774Z] GET /health - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:14:25.799Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:14:26.015Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:14:26.018Z] GET /api/clients - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:14:26.021Z] GET /api/transactions - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:14:26.023Z] GET /api/audit-logs - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:14:26.027Z] POST /api/clients - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:14:26.031Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:14:26.034Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-Token verification failed: JsonWebTokenError: jwt malformed
-    at module.exports [as verify] (/app/node_modules/jsonwebtoken/verify.js:70:17)
-    at verifyToken (/app/lib/security.ts:103:25)
-    at authenticateToken (/app/lib/middleware/auth.ts:35:19)
-    at Layer.handleRequest (/app/node_modules/router/lib/layer.js:152:17)
-    at next (/app/node_modules/router/lib/route.js:157:13)
-    at Route.dispatch (/app/node_modules/router/lib/route.js:117:3)
-    at handle (/app/node_modules/router/index.js:435:11)
-    at Layer.handleRequest (/app/node_modules/router/lib/layer.js:152:17)
-    at /app/node_modules/router/index.js:295:15
-    at processParams (/app/node_modules/router/index.js:582:12)
-[2026-07-29T23:14:26.036Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-Token verification failed: SyntaxError: Unexpected token '�', "�{ږ'" is not valid JSON
-    at JSON.parse (<anonymous>)
-    at Object.jwsDecode [as decode] (/app/node_modules/jws/lib/verify-stream.js:71:20)
-    at module.exports (/app/node_modules/jsonwebtoken/decode.js:5:21)
-    at module.exports [as verify] (/app/node_modules/jsonwebtoken/verify.js:76:20)
-    at verifyToken (/app/lib/security.ts:103:25)
-    at authenticateToken (/app/lib/middleware/auth.ts:35:19)
-    at Layer.handleRequest (/app/node_modules/router/lib/layer.js:152:17)
-    at next (/app/node_modules/router/lib/route.js:157:13)
-    at Route.dispatch (/app/node_modules/router/lib/route.js:117:3)
-    at handle (/app/node_modules/router/index.js:435:11)
-[2026-07-29T23:14:26.039Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:14:26.041Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:14:26.043Z] GET /api/clients - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:14:26.044Z] GET /api/transactions - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:14:26.046Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:14:26.047Z] GET /api/clients/invalid-id-format - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:14:26.052Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:14:26.056Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:14:26.057Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:14:26.057Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:14:26.058Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:18:08.837Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: http://localhost:5173
-✅ Login success for cashier@wao.test - Role: caissier
-[2026-07-29T23:18:09.371Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:18:09.395Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:18:09.910Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:18:09.993Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:18:19.374Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:18:19.375Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:18:29.374Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:18:29.375Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:18:39.408Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:18:39.410Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:19:21.089Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: http://localhost:5173
-✅ Login success for cashier@wao.test - Role: caissier
-[2026-07-29T23:19:21.517Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:19:21.526Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:19:21.762Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:19:22.035Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:19:27.407Z] GET /api/transactions - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:19:27.433Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:19:27.473Z] GET /api/transactions - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:19:27.827Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:19:32.415Z] GET /api/transactions - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:19:32.417Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
+[2026-07-29T23:16:02.066Z] GET /api/users - IP: 127.0.0.1 - Origin: undefined
+[2026-07-29T23:16:02.105Z] POST /api/clients - IP: 127.0.0.1 - Origin: undefined
+[2026-07-29T23:16:02.383Z] POST /api/clients/cms6pe4os0002tej6u8t39zfr/reset - IP: 127.0.0.1 - Origin: undefined
+[2026-07-29T23:16:02.804Z] GET /api/clients/cms6pe4os0002tej6u8t39zfr - IP: 127.0.0.1 - Origin: undefined
+[2026-07-29T23:16:03.096Z] DELETE /api/clients/cms6pe4os0002tej6u8t39zfr - IP: 127.0.0.1 - Origin: undefined
+[2026-07-29T23:16:58.137Z] HEAD / - IP: 127.0.0.1 - Origin: undefined
 [2026-07-29T23:19:45.545Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: http://localhost:5173
 ✅ Login success for admin@wao.test - Role: admin
 [2026-07-29T23:19:46.108Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
@@ -163,8 +54,14 @@ Token verification failed: SyntaxError: Unexpected token '�', "�{ږ'" is not
 [2026-07-29T23:19:46.879Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
 [2026-07-29T23:19:50.867Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
 [2026-07-29T23:19:50.869Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
+[2026-07-29T23:19:50.914Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
+[2026-07-29T23:19:51.181Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
 [2026-07-29T23:20:00.907Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
+[2026-07-29T23:20:00.910Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
 [2026-07-29T23:20:10.898Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
+[2026-07-29T23:20:10.900Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
+[2026-07-29T23:20:20.895Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
+[2026-07-29T23:20:20.897Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
 [2026-07-29T23:43:53.191Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: http://localhost:5173
 ✅ Login success for admin@wao.test - Role: admin
 [2026-07-29T23:43:54.820Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
