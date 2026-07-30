@@ -1301,6 +1301,23 @@ app.post('/api/users', authenticateToken, requireRole('admin'), async (req: Requ
 // ───────────────────────────────────────────────────────────────────────────
 
 /**
+ * GET /api/transactions
+ * Récupère la liste de toutes les transactions
+ */
+app.get('/api/transactions', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const transactions = await prisma.transaction.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    })
+    res.json(transactions)
+  } catch (error: any) {
+    console.error('Fetch transactions error:', error)
+    res.status(500).json({ error: 'Failed to fetch transactions', message: error.message })
+  }
+})
+
+/**
  * POST /api/transactions
  * Enregistre une transaction (dépôt/retrait)
  */

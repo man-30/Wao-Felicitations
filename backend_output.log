@@ -1,3 +1,5 @@
+react-vite-tailwind@0.0.0 backend:dev
+npx tsx backend-express-complete.ts
 
 > react-vite-tailwind@0.0.0 backend:dev
 > npx tsx backend-express-complete.ts

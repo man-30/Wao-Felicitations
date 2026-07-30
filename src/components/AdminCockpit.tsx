@@ -97,7 +97,7 @@ export default function AdminCockpit({ currentUser }: AdminCockpitProps) {
   const [users, setUsers] = useState<User[]>(db.getUsers());
   const [clients, setClients] = useState<Client[]>(db.getClients());
   const [transactions, setTransactions] = useState<Transaction[]>(db.getTransactions());
-  const [expenses, setExpenses] = useState<Expense[]>(db.getExpenses());
+  const [expenses] = useState<Expense[]>(db.getExpenses());
   const [logs, setLogs] = useState<ActionLog[]>(db.getLogs());
   const [codeRequests, setCodeRequests] = useState<AdminCodeRequest[]>(refreshAdminCodeRequests());
   const [employeePayments, setEmployeePayments] = useState<EmployeePayment[]>(db.getEmployeePayments());
@@ -106,14 +106,17 @@ export default function AdminCockpit({ currentUser }: AdminCockpitProps) {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [apiUsers, apiClients] = await Promise.all([
+        const [apiUsers, apiClients, apiTxs] = await Promise.all([
           api.getUsers(),
-          api.getClients()
+          api.getClients(),
+          api.getTransactions()
         ]);
         setUsers(apiUsers);
         setClients(apiClients);
+        setTransactions(apiTxs);
         // Sync with local DB for consistency in other components
         db.saveUsers(apiUsers);
+        db.saveTransactions(apiTxs);
         db.syncDataFromServer(apiClients);
       } catch (err) {
         console.error('Failed to sync admin data with backend:', err);
@@ -122,8 +125,27 @@ export default function AdminCockpit({ currentUser }: AdminCockpitProps) {
     loadData();
   }, []);
 
-  // Synchronisation temps réel complète — polling 3s (pour les logs et codes)
+  // Synchronisation temps réel complète — polling (pour les logs, codes, transactions, clients)
   useEffect(() => {
+    const syncRealtime = async () => {
+      try {
+        const [apiClients, apiTxs] = await Promise.all([
+          api.getClients(),
+          api.getTransactions()
+        ]);
+
+        db.syncDataFromServer(apiClients);
+        db.saveTransactions(apiTxs);
+
+        setClients(apiClients);
+        setTransactions(apiTxs);
+      } catch (err) {
+        console.error('Realtime sync error:', err);
+      }
+    };
+
+    const syncInterval = setInterval(syncRealtime, 5000);
+
     const interval = setInterval(() => {
       // Payments
       const freshPay = db.getEmployeePayments();
@@ -136,7 +158,11 @@ export default function AdminCockpit({ currentUser }: AdminCockpitProps) {
       setLogs(db.getLogs());
       setCodeRequests(refreshAdminCodeRequests());
     }, 3000);
-    return () => clearInterval(interval);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(syncInterval);
+    };
   }, []);
 
   const [range, setRange] = useState<RangeKey>('global');
