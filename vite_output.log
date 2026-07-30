@@ -3,7 +3,11 @@
 > vite
 
 
+<<<<<<< HEAD
   VITE v7.2.4  ready in 543 ms
+=======
+  VITE v7.2.4  ready in 422 ms
+>>>>>>> origin/main
 
   ➜  Local:   http://localhost:5173/
   ➜  Network: use --host to expose
