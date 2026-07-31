@@ -1,10 +1,8 @@
-react-vite-tailwind@0.0.0 backend:dev
-npx tsx backend-express-complete.ts
 
 > react-vite-tailwind@0.0.0 backend:dev
 > npx tsx backend-express-complete.ts
 
-◇ injected env (0) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
 ◇ injected env from .env
 [CORS] Allowed origins: ["http://localhost:3000","http://localhost:5173"]
 [STATIC] Serving frontend from /app/dist
@@ -24,9 +22,11 @@ Server running on http://0.0.0.0:3001
 Protected routes require Authorization header:
 Authorization: Bearer <token>
 
-[2026-07-29T23:15:26.524Z] GET /health - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:15:26.559Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: undefined
-(node:253778) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+[2026-07-31T00:11:52.554Z] POST /api/seed - IP: 127.0.0.1 - Origin: undefined
+🌱 Starting seed...
+Creating or updating test users...
+Upserting user: admin@wao.test
+(node:201064) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
 In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
 
 To prepare for this change:
@@ -35,42 +35,44 @@ To prepare for this change:
 
 See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
 (Use `node --trace-warnings ...` to show where the warning was created)
-✅ Login success for admin@wao.test - Role: admin
-[2026-07-29T23:15:27.143Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:15:27.396Z] GET /api/audit-logs - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:16:01.731Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: undefined
-✅ Login success for admin@wao.test - Role: admin
-[2026-07-29T23:16:02.066Z] GET /api/users - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:16:02.105Z] POST /api/clients - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:16:02.383Z] POST /api/clients/cms6pe4os0002tej6u8t39zfr/reset - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:16:02.804Z] GET /api/clients/cms6pe4os0002tej6u8t39zfr - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:16:03.096Z] DELETE /api/clients/cms6pe4os0002tej6u8t39zfr - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:16:58.137Z] HEAD / - IP: 127.0.0.1 - Origin: undefined
-[2026-07-29T23:19:45.545Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: http://localhost:5173
-✅ Login success for admin@wao.test - Role: admin
-[2026-07-29T23:19:46.108Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:19:46.119Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:19:46.145Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:19:46.879Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:19:50.867Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:19:50.869Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:19:50.914Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:19:51.181Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:20:00.907Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:20:00.910Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:20:10.898Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:20:10.900Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:20:20.895Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:20:20.897Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:43:53.191Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: http://localhost:5173
-✅ Login success for admin@wao.test - Role: admin
-[2026-07-29T23:43:54.820Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:43:54.840Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:43:54.958Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:43:55.860Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:43:58.808Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:43:58.812Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:43:58.850Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:43:59.128Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:44:08.843Z] GET /api/clients - IP: 127.0.0.1 - Origin: http://localhost:5173
-[2026-07-29T23:44:08.845Z] GET /api/users - IP: 127.0.0.1 - Origin: http://localhost:5173
+✅ Upserted: admin@wao.test
+Upserting user: cashier@wao.test
+✅ Upserted: cashier@wao.test
+Upserting user: commercial@wao.test
+✅ Upserted: commercial@wao.test
+Upserting user: admin@wao-felicitations.com
+✅ Upserted: admin@wao-felicitations.com
+Upserting user: admin@wao.com
+✅ Upserted: admin@wao.com
+✅ Seed completed. Seeded 5 users
+[2026-07-31T00:12:13.308Z] GET /health - IP: 127.0.0.1 - Origin: undefined
+[2026-07-31T00:12:13.331Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: undefined
+✅ Login success for admin@wao.com - Role: admin
+[2026-07-31T00:12:13.488Z] GET /health - IP: 127.0.0.1 - Origin: undefined
+[2026-07-31T00:12:13.491Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: undefined
+✅ Login success for admin@wao.com - Role: admin
+[2026-07-31T00:12:13.632Z] GET /health - IP: 127.0.0.1 - Origin: undefined
+[2026-07-31T00:12:13.635Z] GET /health - IP: 127.0.0.1 - Origin: undefined
+[2026-07-31T00:12:13.638Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: undefined
+✅ Login success for admin@wao.com - Role: admin
+[2026-07-31T00:12:13.779Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
+[2026-07-31T00:12:14.024Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
+[2026-07-31T00:12:14.028Z] GET /api/dashboard/stats - IP: 127.0.0.1 - Origin: undefined
+Token verification failed: JsonWebTokenError: jwt malformed
+    at module.exports [as verify] (/app/node_modules/jsonwebtoken/verify.js:70:17)
+    at verifyToken (/app/lib/security.ts:103:25)
+    at authenticateToken (/app/lib/middleware/auth.ts:35:19)
+    at Layer.handleRequest (/app/node_modules/router/lib/layer.js:152:17)
+    at next (/app/node_modules/router/lib/route.js:157:13)
+    at Route.dispatch (/app/node_modules/router/lib/route.js:117:3)
+    at handle (/app/node_modules/router/index.js:435:11)
+    at Layer.handleRequest (/app/node_modules/router/lib/layer.js:152:17)
+    at /app/node_modules/router/index.js:295:15
+    at processParams (/app/node_modules/router/index.js:582:12)
+[2026-07-31T00:12:14.036Z] GET /api/audit-logs - IP: 127.0.0.1 - Origin: undefined
+[2026-07-31T00:12:14.142Z] GET /api/clients - IP: 127.0.0.1 - Origin: undefined
+[2026-07-31T00:12:14.472Z] GET /api/transactions - IP: 127.0.0.1 - Origin: undefined
+[2026-07-31T00:12:14.506Z] POST /api/clients - IP: 127.0.0.1 - Origin: undefined
+[2026-07-31T00:13:21.175Z] POST /api/auth/login - IP: 127.0.0.1 - Origin: undefined
+✅ Login success for admin@wao.com - Role: admin
+[2026-07-31T00:13:21.504Z] POST /api/clients/cms86voj100019nj6j8r1ozwg/reset - IP: 127.0.0.1 - Origin: undefined
